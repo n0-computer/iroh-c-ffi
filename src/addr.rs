@@ -1,4 +1,4 @@
-use safer_ffi::{prelude::*, slice, vec};
+use safer_ffi::{prelude::*, vec};
 
 use crate::key::PublicKey;
 
@@ -89,14 +89,12 @@ pub fn node_addr_add_direct_address(node_addr: &mut NodeAddr, address: repr_c::B
     });
 }
 
-/// Get the direct addresses of this peer.
+/// Get the nth direct addresses of this peer.
 ///
-/// Result must be freed with `free_vec_socket_addr`.
+/// Panics if i is larger than the available addrs.
 #[ffi_export]
-pub fn node_addr_direct_addresses(
-    addr: &NodeAddr,
-) -> slice::slice_ref<'_, repr_c::Box<SocketAddr>> {
-    addr.direct_addresses.as_ref()
+pub fn node_addr_direct_addresses_nth(addr: &NodeAddr, i: usize) -> &SocketAddr {
+    &addr.direct_addresses[i]
 }
 
 /// Get the derp url of this peer.
@@ -112,6 +110,13 @@ pub fn node_addr_derp_url(addr: &NodeAddr) -> Option<&repr_c::Box<Url>> {
 pub struct SocketAddr {
     addr: std::net::SocketAddr,
 }
+/// Formats the given socket addr as a string
+///
+/// Result must be freed with `rust_free_string`
+#[ffi_export]
+pub fn socket_addr_as_str(addr: &SocketAddr) -> char_p::Box {
+    addr.addr.to_string().try_into().unwrap()
+}
 
 /// Represents a valid URL.
 #[derive_ReprC]
@@ -119,4 +124,12 @@ pub struct SocketAddr {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Url {
     url: url::Url,
+}
+
+/// Formats the given url as a string
+///
+/// Result must be freed with `rust_free_string`
+#[ffi_export]
+pub fn url_as_str(url: &Url) -> char_p::Box {
+    url.url.to_string().try_into().unwrap()
 }

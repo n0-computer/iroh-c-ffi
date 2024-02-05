@@ -19,6 +19,7 @@ pub struct MagicEndpointConfig {
 /// The options to configure derp.
 #[derive_ReprC]
 #[repr(u8)]
+#[derive(Debug, Copy, Clone)]
 pub enum DerpMode {
     /// Derp mode is entirely disabled
     Disabled,
@@ -59,9 +60,12 @@ pub fn magic_endpoint_config_default() -> MagicEndpointConfig {
 
 /// Add the given ALPN to the list of accepted ALPNs.
 #[ffi_export]
-pub fn magic_endpoint_config_add_alpn(config: &mut MagicEndpointConfig, alpn: vec::Vec<u8>) {
+pub fn magic_endpoint_config_add_alpn(
+    config: &mut MagicEndpointConfig,
+    alpn: slice::slice_ref<'_, u8>,
+) {
     config.alpn_protocols.with_rust_mut(|alpns| {
-        alpns.push(alpn);
+        alpns.push(alpn.to_vec().into());
     });
 }
 
@@ -107,7 +111,7 @@ pub enum MagicEndpointResult {
 
 #[ffi_export]
 pub fn magic_endpoint_bind(
-    config: MagicEndpointConfig,
+    config: &MagicEndpointConfig,
     port: u16,
     out: &mut repr_c::Box<MagicEndpoint>,
 ) -> MagicEndpointResult {
@@ -160,7 +164,7 @@ pub fn magic_endpoint_recv_free(stream: repr_c::Box<RecvStream>) {
 pub fn magic_endpoint_recv_stream_read(
     stream: &mut repr_c::Box<RecvStream>,
     mut data: slice::slice_mut<'_, u8>,
-) -> isize {
+) -> i64 {
     let res = TOKIO_EXECUTOR.block_on(async move {
         stream
             .stream
@@ -171,7 +175,7 @@ pub fn magic_endpoint_recv_stream_read(
     });
 
     match res {
-        Ok(read) => read.unwrap_or(0) as isize,
+        Ok(read) => read.unwrap_or(0) as i64,
         Err(_err) => -1,
     }
 }
@@ -337,10 +341,10 @@ mod tests {
         let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
         // create config
         let mut config_server = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_server, alpn.clone());
+        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
 
         let mut config_client = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_client, alpn.clone());
+        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
 
         let (s, r) = std::sync::mpsc::channel();
 
@@ -349,7 +353,7 @@ mod tests {
         let server_thread = std::thread::spawn(move || {
             // create magic endpoint and bind
             let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(config_server, 0, &mut ep);
+            let bind_res = magic_endpoint_bind(&config_server, 0, &mut ep);
             assert_eq!(bind_res, MagicEndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
@@ -380,7 +384,7 @@ mod tests {
         let client_thread = std::thread::spawn(move || {
             // create magic endpoint and bind
             let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(config_client, 0, &mut ep);
+            let bind_res = magic_endpoint_bind(&config_client, 0, &mut ep);
             assert_eq!(bind_res, MagicEndpointResult::Ok);
 
             // wait for addr from server

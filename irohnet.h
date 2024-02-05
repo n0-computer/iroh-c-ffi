@@ -180,7 +180,7 @@ typedef struct MagicEndpointConfig {
 /** <No documentation available> */
 MagicEndpointResult_t
 magic_endpoint_bind (
-    MagicEndpointConfig_t config,
+    MagicEndpointConfig_t const * config,
     uint16_t port,
     MagicEndpoint_t * * out);
 
@@ -190,7 +190,7 @@ magic_endpoint_bind (
 void
 magic_endpoint_config_add_alpn (
     MagicEndpointConfig_t * config,
-    Vec_uint8_t alpn);
+    slice_ref_uint8_t alpn);
 
 /** \brief
  *  Generate a default magic endpoint configuration.
@@ -344,8 +344,8 @@ typedef struct slice_mut_uint8 {
  *
  *  Returns how many bytes were read. Returns `-1` if an error occured.
  */
-ssize_t
-magic_endpoint_recv_stream_recv (
+int64_t
+magic_endpoint_recv_stream_read (
     RecvStream_t * * stream,
     slice_mut_uint8_t data);
 
@@ -375,7 +375,7 @@ magic_endpoint_send_stream_finish (
  *  Send data on the stream
  */
 MagicEndpointResult_t
-magic_endpoint_send_stream_send (
+magic_endpoint_send_stream_write (
     SendStream_t * * stream,
     slice_ref_uint8_t data);
 
@@ -411,44 +411,14 @@ node_addr_derp_url (
     NodeAddr_t const * addr);
 
 /** \brief
- *  `&'lt [T]` but with a guaranteed `#[repr(C)]` layout.
+ *  Get the nth direct addresses of this peer.
  *
- *  # C layout (for some given type T)
- *
- *  ```c
- *  typedef struct {
- *  // Cannot be NULL
- *  T * ptr;
- *  size_t len;
- *  } slice_T;
- *  ```
- *
- *  # Nullable pointer?
- *
- *  If you want to support the above typedef, but where the `ptr` field is
- *  allowed to be `NULL` (with the contents of `len` then being undefined)
- *  use the `Option< slice_ptr<_> >` type.
+ *  Panics if i is larger than the available addrs.
  */
-typedef struct slice_ref_SocketAddr_ptr {
-    /** \brief
-     *  Pointer to the first element (if any).
-     */
-    SocketAddr_t * const * ptr;
-
-    /** \brief
-     *  Element count
-     */
-    size_t len;
-} slice_ref_SocketAddr_ptr_t;
-
-/** \brief
- *  Get the direct addresses of this peer.
- *
- *  Result must be freed with `free_vec_socket_addr`.
- */
-slice_ref_SocketAddr_ptr_t
-node_addr_direct_addresses (
-    NodeAddr_t const * addr);
+SocketAddr_t const *
+node_addr_direct_addresses_nth (
+    NodeAddr_t const * addr,
+    size_t i);
 
 /** \brief
  *  Free the node addr.
@@ -488,7 +458,7 @@ public_key_default (void);
  */
 void
 public_key_free (
-    PublicKey_t key);
+    PublicKey_t _key);
 
 /** \brief
  *  Result of handling key material.
@@ -579,6 +549,24 @@ secret_key_generate (void);
 PublicKey_t
 secret_key_public (
     SecretKey_t const * key);
+
+/** \brief
+ *  Formats the given socket addr as a string
+ *
+ *  Result must be freed with `rust_free_string`
+ */
+char *
+socket_addr_as_str (
+    SocketAddr_t const * addr);
+
+/** \brief
+ *  Formats the given url as a string
+ *
+ *  Result must be freed with `rust_free_string`
+ */
+char *
+url_as_str (
+    Url_t const * url);
 
 
 #ifdef __cplusplus
