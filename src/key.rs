@@ -16,15 +16,15 @@ pub enum KeyResult {
 /// A public key.
 #[derive_ReprC]
 #[repr(C)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct PublicKey {
     key: [u8; 32],
 }
 
 /// Free the passed in key.
 #[ffi_export]
-pub fn public_key_free(key: PublicKey) {
-    drop(key);
+pub fn public_key_free(_key: PublicKey) {
+    // nothing to do
 }
 
 /// Returns the public key as a base32 string.
@@ -43,7 +43,7 @@ pub fn public_key_as_base32(key: &PublicKey) -> char_p::Box {
 /// Result must be freed using `publi_key_free`.
 #[ffi_export]
 pub fn public_key_default() -> PublicKey {
-    PublicKey { key: [0u8; 32] }
+    PublicKey::default()
 }
 
 /// Parses the public key from a base32 string.

@@ -13,9 +13,95 @@
 extern "C" {
 #endif
 
+/** \brief
+ *  An endpoint that leverages a quic endpoint, backed by a magic socket.
+ */
+typedef struct MagicEndpoint MagicEndpoint_t;
+
 
 #include <stddef.h>
 #include <stdint.h>
+
+/** \brief
+ *  `&'lt [T]` but with a guaranteed `#[repr(C)]` layout.
+ *
+ *  # C layout (for some given type T)
+ *
+ *  ```c
+ *  typedef struct {
+ *  // Cannot be NULL
+ *  T * ptr;
+ *  size_t len;
+ *  } slice_T;
+ *  ```
+ *
+ *  # Nullable pointer?
+ *
+ *  If you want to support the above typedef, but where the `ptr` field is
+ *  allowed to be `NULL` (with the contents of `len` then being undefined)
+ *  use the `Option< slice_ptr<_> >` type.
+ */
+typedef struct slice_ref_uint8 {
+    /** \brief
+     *  Pointer to the first element (if any).
+     */
+    uint8_t const * ptr;
+
+    /** \brief
+     *  Element count
+     */
+    size_t len;
+} slice_ref_uint8_t;
+
+/** <No documentation available> */
+typedef struct RecvStream RecvStream_t;
+
+/** \brief
+ *  Result of dealing with a magic endpoint.
+ */
+/** \remark Has the same ABI as `uint8_t` **/
+#ifdef DOXYGEN
+typedef
+#endif
+enum MagicEndpointResult {
+    /** \brief
+     *  Everything is ok
+     */
+    MAGIC_ENDPOINT_RESULT_OK = 0,
+    /** \brief
+     *  Failed to bind.
+     */
+    MAGIC_ENDPOINT_RESULT_BIND_ERROR,
+    /** \brief
+     *  Failed to accept a uni directional stream,
+     */
+    MAGIC_ENDPOINT_RESULT_ACCEPT_UNI_FAILED,
+    /** \brief
+     *  Failed to connect and establish a uni directional stream.
+     */
+    MAGIC_ENDPOINT_RESULT_CONNECT_UNI_ERROR,
+    /** \brief
+     *  Unable to retrive node addr.
+     */
+    MAGIC_ENDPOINT_RESULT_ADDR_ERROR,
+    /** \brief
+     *  Error while sending data.
+     */
+    MAGIC_ENDPOINT_RESULT_SEND_ERROR,
+}
+#ifndef DOXYGEN
+; typedef uint8_t
+#endif
+MagicEndpointResult_t;
+
+/** \brief
+ *  Accept a new connection and uni directinal stream on this endpoint.
+ */
+MagicEndpointResult_t
+magic_endpoint_accept_uni (
+    MagicEndpoint_t * const * ep,
+    slice_ref_uint8_t expected_alpn,
+    RecvStream_t * * out);
 
 /** \brief
  *  The options to configure derp.
@@ -91,33 +177,6 @@ typedef struct MagicEndpointConfig {
     SecretKey_t * secret_key;
 } MagicEndpointConfig_t;
 
-/** \brief
- *  An endpoint that leverages a quic endpoint, backed by a magic socket.
- */
-typedef struct MagicEndpoint MagicEndpoint_t;
-
-/** \brief
- *  Result of dealing with a magic endpoint.
- */
-/** \remark Has the same ABI as `uint8_t` **/
-#ifdef DOXYGEN
-typedef
-#endif
-enum MagicEndpointResult {
-    /** \brief
-     *  Everything is ok
-     */
-    MAGIC_ENDPOINT_RESULT_OK = 0,
-    /** \brief
-     *  Failed to bind.
-     */
-    MAGIC_ENDPOINT_RESULT_BIND_ERROR,
-}
-#ifndef DOXYGEN
-; typedef uint8_t
-#endif
-MagicEndpointResult_t;
-
 /** <No documentation available> */
 MagicEndpointResult_t
 magic_endpoint_bind (
@@ -126,10 +185,94 @@ magic_endpoint_bind (
     MagicEndpoint_t * * out);
 
 /** \brief
+ *  Add the given ALPN to the list of accepted ALPNs.
+ */
+void
+magic_endpoint_config_add_alpn (
+    MagicEndpointConfig_t * config,
+    Vec_uint8_t alpn);
+
+/** \brief
  *  Generate a default magic endpoint configuration.
+ *
+ *  Must be freed using `magic_endpoing_config_free`.
  */
 MagicEndpointConfig_t
 magic_endpoint_config_default (void);
+
+/** \brief
+ *  Frees the magic endpoint config.
+ */
+void
+magic_endpoint_config_free (
+    MagicEndpointConfig_t config);
+
+typedef struct {
+    uint8_t idx[32];
+} uint8_32_array_t;
+
+/** \brief
+ *  A public key.
+ */
+typedef struct PublicKey {
+    /** <No documentation available> */
+    uint8_32_array_t key;
+} PublicKey_t;
+
+/** \brief
+ *  Represents a valid URL.
+ */
+typedef struct Url Url_t;
+
+/** \brief
+ *  Represents an IPv4 or IPv6 address, including a port number.
+ */
+typedef struct SocketAddr SocketAddr_t;
+
+/** \brief
+ *  Same as [`Vec<T>`][`rust::Vec`], but with guaranteed `#[repr(C)]` layout
+ */
+typedef struct Vec_SocketAddr_ptr {
+    /** <No documentation available> */
+    SocketAddr_t * * ptr;
+
+    /** <No documentation available> */
+    size_t len;
+
+    /** <No documentation available> */
+    size_t cap;
+} Vec_SocketAddr_ptr_t;
+
+/** \brief
+ *  A peer and it's addressing information.
+ */
+typedef struct NodeAddr {
+    /** \brief
+     *  The node's public key.
+     */
+    PublicKey_t node_id;
+
+    /** \brief
+     *  The peer's home DERP url.
+     */
+    Url_t * derp_url;
+
+    /** \brief
+     *  Socket addresses where the peer might be reached directly.
+     */
+    Vec_SocketAddr_ptr_t direct_addresses;
+} NodeAddr_t;
+
+/** <No documentation available> */
+typedef struct SendStream SendStream_t;
+
+/** <No documentation available> */
+MagicEndpointResult_t
+magic_endpoint_connect_uni (
+    MagicEndpoint_t * const * ep,
+    slice_ref_uint8_t alpn,
+    NodeAddr_t node_addr,
+    SendStream_t * * out);
 
 /** \brief
  *  Generate a default endpoint.
@@ -146,17 +289,182 @@ void
 magic_endpoint_free (
     MagicEndpoint_t * ep);
 
-typedef struct {
-    uint8_t idx[32];
-} uint8_32_array_t;
+/** <No documentation available> */
+MagicEndpointResult_t
+magic_endpoint_my_addr (
+    MagicEndpoint_t * const * ep,
+    NodeAddr_t * out);
 
 /** \brief
- *  A public key.
+ *  Free the recv stream.
  */
-typedef struct PublicKey {
-    /** <No documentation available> */
-    uint8_32_array_t key;
-} PublicKey_t;
+void
+magic_endpoint_recv_free (
+    RecvStream_t * stream);
+
+/** \brief
+ *  Must be freed using `magic_endpoint_recv_stream_free`
+ */
+RecvStream_t *
+magic_endpoint_recv_stream_default (void);
+
+/** \brief
+ *  `&'lt mut [T]` but with a guaranteed `#[repr(C)]` layout.
+ *
+ *  # C layout (for some given type T)
+ *
+ *  ```c
+ *  typedef struct {
+ *  // Cannot be NULL
+ *  T * ptr;
+ *  size_t len;
+ *  } slice_T;
+ *  ```
+ *
+ *  # Nullable pointer?
+ *
+ *  If you want to support the above typedef, but where the `ptr` field is
+ *  allowed to be `NULL` (with the contents of `len` then being undefined)
+ *  use the `Option< slice_ptr<_> >` type.
+ */
+typedef struct slice_mut_uint8 {
+    /** \brief
+     *  Pointer to the first element (if any).
+     */
+    uint8_t * ptr;
+
+    /** \brief
+     *  Element count
+     */
+    size_t len;
+} slice_mut_uint8_t;
+
+/** \brief
+ *  Recv data on the stream.
+ *
+ *  Returns how many bytes were read. Returns `-1` if an error occured.
+ */
+ssize_t
+magic_endpoint_recv_stream_recv (
+    RecvStream_t * * stream,
+    slice_mut_uint8_t data);
+
+/** \brief
+ *  Free the send stream.
+ */
+void
+magic_endpoint_send_free (
+    SendStream_t * stream);
+
+/** \brief
+ *  Must be freed using `magic_endpoint_send_stream_free`
+ */
+SendStream_t *
+magic_endpoint_send_stream_default (void);
+
+/** \brief
+ *  Finish the sending on this stream.
+ *
+ *  Consumes the send stream, no need to free it afterwards.
+ */
+MagicEndpointResult_t
+magic_endpoint_send_stream_finish (
+    SendStream_t * stream);
+
+/** \brief
+ *  Send data on the stream
+ */
+MagicEndpointResult_t
+magic_endpoint_send_stream_send (
+    SendStream_t * * stream,
+    slice_ref_uint8_t data);
+
+/** \brief
+ *  Add a derp url to the peer's addr info.
+ */
+void
+node_addr_add_derp_url (
+    NodeAddr_t * addr,
+    Url_t * derp_url);
+
+/** \brief
+ *  Add the given direct addresses to the peer's addr info.
+ */
+void
+node_addr_add_direct_address (
+    NodeAddr_t * node_addr,
+    SocketAddr_t * address);
+
+/** \brief
+ *  Create a an empty (invalid) addr with no details.
+ *
+ *  Must be freed using `node_addr_free`.
+ */
+NodeAddr_t
+node_addr_default (void);
+
+/** \brief
+ *  Get the derp url of this peer.
+ */
+Url_t * const *
+node_addr_derp_url (
+    NodeAddr_t const * addr);
+
+/** \brief
+ *  `&'lt [T]` but with a guaranteed `#[repr(C)]` layout.
+ *
+ *  # C layout (for some given type T)
+ *
+ *  ```c
+ *  typedef struct {
+ *  // Cannot be NULL
+ *  T * ptr;
+ *  size_t len;
+ *  } slice_T;
+ *  ```
+ *
+ *  # Nullable pointer?
+ *
+ *  If you want to support the above typedef, but where the `ptr` field is
+ *  allowed to be `NULL` (with the contents of `len` then being undefined)
+ *  use the `Option< slice_ptr<_> >` type.
+ */
+typedef struct slice_ref_SocketAddr_ptr {
+    /** \brief
+     *  Pointer to the first element (if any).
+     */
+    SocketAddr_t * const * ptr;
+
+    /** \brief
+     *  Element count
+     */
+    size_t len;
+} slice_ref_SocketAddr_ptr_t;
+
+/** \brief
+ *  Get the direct addresses of this peer.
+ *
+ *  Result must be freed with `free_vec_socket_addr`.
+ */
+slice_ref_SocketAddr_ptr_t
+node_addr_direct_addresses (
+    NodeAddr_t const * addr);
+
+/** \brief
+ *  Free the node addr.
+ */
+void
+node_addr_free (
+    NodeAddr_t node_addr);
+
+/** \brief
+ *  Create a new addr with no details.
+ *
+ *  Must be freed using `node_addr_free`.
+ */
+NodeAddr_t
+node_addr_new (
+    PublicKey_t node_id);
 
 /** \brief
  *  Returns the public key as a base32 string.
