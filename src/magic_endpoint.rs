@@ -153,7 +153,7 @@ pub fn magic_endpoint_recv_stream_default() -> repr_c::Box<RecvStream> {
 
 /// Free the recv stream.
 #[ffi_export]
-pub fn magic_endpoint_recv_free(stream: repr_c::Box<RecvStream>) {
+pub fn magic_endpoint_recv_stream_free(stream: repr_c::Box<RecvStream>) {
     drop(stream);
 }
 
@@ -195,7 +195,7 @@ pub fn magic_endpoint_send_stream_default() -> repr_c::Box<SendStream> {
 
 /// Free the send stream.
 #[ffi_export]
-pub fn magic_endpoint_send_free(stream: repr_c::Box<SendStream>) {
+pub fn magic_endpoint_send_stream_free(stream: repr_c::Box<SendStream>) {
     drop(stream);
 }
 

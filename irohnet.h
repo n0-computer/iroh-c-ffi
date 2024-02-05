@@ -296,17 +296,17 @@ magic_endpoint_my_addr (
     NodeAddr_t * out);
 
 /** \brief
- *  Free the recv stream.
- */
-void
-magic_endpoint_recv_free (
-    RecvStream_t * stream);
-
-/** \brief
  *  Must be freed using `magic_endpoint_recv_stream_free`
  */
 RecvStream_t *
 magic_endpoint_recv_stream_default (void);
+
+/** \brief
+ *  Free the recv stream.
+ */
+void
+magic_endpoint_recv_stream_free (
+    RecvStream_t * stream);
 
 /** \brief
  *  `&'lt mut [T]` but with a guaranteed `#[repr(C)]` layout.
@@ -350,13 +350,6 @@ magic_endpoint_recv_stream_read (
     slice_mut_uint8_t data);
 
 /** \brief
- *  Free the send stream.
- */
-void
-magic_endpoint_send_free (
-    SendStream_t * stream);
-
-/** \brief
  *  Must be freed using `magic_endpoint_send_stream_free`
  */
 SendStream_t *
@@ -369,6 +362,13 @@ magic_endpoint_send_stream_default (void);
  */
 MagicEndpointResult_t
 magic_endpoint_send_stream_finish (
+    SendStream_t * stream);
+
+/** \brief
+ *  Free the send stream.
+ */
+void
+magic_endpoint_send_stream_free (
     SendStream_t * stream);
 
 /** \brief
