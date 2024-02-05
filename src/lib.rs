@@ -1,5 +1,6 @@
 pub mod key;
 pub mod util;
+pub mod magic_endpoint;
 
 /// The following function is only necessary for the header generation.
 #[cfg(feature = "headers")]

@@ -17,6 +17,135 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
+/** \brief
+ *  The options to configure derp.
+ */
+/** \remark Has the same ABI as `uint8_t` **/
+#ifdef DOXYGEN
+typedef
+#endif
+enum DerpMode {
+    /** \brief
+     *  Derp mode is entirely disabled
+     */
+    DERP_MODE_DISABLED,
+    /** \brief
+     *  Default derp map is used.
+     */
+    DERP_MODE_DEFAULT,
+    /** \brief
+     *  Default derp map, but only used for stun.
+     *  Not yet implemented
+     */
+    DERP_MODE_STUN_ONLY,
+}
+#ifndef DOXYGEN
+; typedef uint8_t
+#endif
+DerpMode_t;
+
+/** \brief
+ *  Same as [`Vec<T>`][`rust::Vec`], but with guaranteed `#[repr(C)]` layout
+ */
+typedef struct Vec_uint8 {
+    /** <No documentation available> */
+    uint8_t * ptr;
+
+    /** <No documentation available> */
+    size_t len;
+
+    /** <No documentation available> */
+    size_t cap;
+} Vec_uint8_t;
+
+/** \brief
+ *  Same as [`Vec<T>`][`rust::Vec`], but with guaranteed `#[repr(C)]` layout
+ */
+typedef struct Vec_Vec_uint8 {
+    /** <No documentation available> */
+    Vec_uint8_t * ptr;
+
+    /** <No documentation available> */
+    size_t len;
+
+    /** <No documentation available> */
+    size_t cap;
+} Vec_Vec_uint8_t;
+
+/** \brief
+ *  A secret key.
+ */
+typedef struct SecretKey SecretKey_t;
+
+/** \brief
+ *  Configuration options for the MagicEndpoint.
+ */
+typedef struct MagicEndpointConfig {
+    /** <No documentation available> */
+    DerpMode_t derp_mode;
+
+    /** <No documentation available> */
+    Vec_Vec_uint8_t alpn_protocols;
+
+    /** <No documentation available> */
+    SecretKey_t * secret_key;
+} MagicEndpointConfig_t;
+
+/** \brief
+ *  An endpoint that leverages a quic endpoint, backed by a magic socket.
+ */
+typedef struct MagicEndpoint MagicEndpoint_t;
+
+/** \brief
+ *  Result of dealing with a magic endpoint.
+ */
+/** \remark Has the same ABI as `uint8_t` **/
+#ifdef DOXYGEN
+typedef
+#endif
+enum MagicEndpointResult {
+    /** \brief
+     *  Everything is ok
+     */
+    MAGIC_ENDPOINT_RESULT_OK = 0,
+    /** \brief
+     *  Failed to bind.
+     */
+    MAGIC_ENDPOINT_RESULT_BIND_ERROR,
+}
+#ifndef DOXYGEN
+; typedef uint8_t
+#endif
+MagicEndpointResult_t;
+
+/** <No documentation available> */
+MagicEndpointResult_t
+magic_endpoint_bind (
+    MagicEndpointConfig_t config,
+    uint16_t port,
+    MagicEndpoint_t * * out);
+
+/** \brief
+ *  Generate a default magic endpoint configuration.
+ */
+MagicEndpointConfig_t
+magic_endpoint_config_default (void);
+
+/** \brief
+ *  Generate a default endpoint.
+ *
+ *  Must be freed using `magic_endpoint_free`.
+ */
+MagicEndpoint_t *
+magic_endpoint_default (void);
+
+/** \brief
+ *  Frees the magic endpoint.
+ */
+void
+magic_endpoint_free (
+    MagicEndpoint_t * ep);
+
 typedef struct {
     uint8_t idx[32];
 } uint8_32_array_t;
@@ -88,9 +217,11 @@ public_key_from_base32 (
     PublicKey_t * out);
 
 /** \brief
- *  A secret key.
+ *  Frees a Rust-allocated string.
  */
-typedef struct SecretKey SecretKey_t;
+void
+rust_free_string (
+    char * string);
 
 /** \brief
  *  Returns the secret key as a base32 string.

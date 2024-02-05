@@ -161,6 +161,12 @@ impl From<SecretKey> for iroh_net::key::SecretKey {
     }
 }
 
+impl From<&SecretKey> for iroh_net::key::SecretKey {
+    fn from(key: &SecretKey) -> Self {
+        key.key.clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
