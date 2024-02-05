@@ -1,15 +1,20 @@
 /* Example program testing the api */
 
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
 
 #include "irohnet.h"
 
 int
-run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice)
+run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_output)
 {
-  printf("Starting server...\n");
+  if (json_output) {
+    printf("{ \"type\": \"server\", \"status\": \"starting\" }\n");
+  } else {
+    printf("Starting server...\n");
+  }
 
   // Bind
   MagicEndpoint_t * ep = magic_endpoint_default();
@@ -28,16 +33,32 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice)
   }
   char * node_id_str = public_key_as_base32(&my_addr.node_id);
   char * derp_url_str = url_as_str(my_addr.derp_url);
-  printf("Listening on:\nNode Id: %s\nDerp: %s\nAddrs:\n", node_id_str, derp_url_str);
+  if (json_output) {
+    printf("{ \"type\": \"server\", \"status\": \"listening\", \"node_id\": \"%s\", \"derp\": \"%s\", \"addrs\": [", node_id_str, derp_url_str);
+  } else {
+    printf("Listening on:\nNode Id: %s\nDerp: %s\nAddrs:\n", node_id_str, derp_url_str);
+  }
 
   // iterate over the direct addresses
   for (int i = 0; i < my_addr.direct_addresses.len; i++) {
     SocketAddr_t const * addr = node_addr_direct_addresses_nth(&my_addr, i);
     char * socket_str = socket_addr_as_str(addr);
-    printf("  - %s\n", socket_str);
+    if (json_output) {
+      printf("\"%s\"", socket_str);
+      if (i < my_addr.direct_addresses.len - 1) {
+        printf(", ");
+      }
+    } else {
+      printf("  - %s\n", socket_str);
+    }
     rust_free_string(socket_str);
   }
-  printf("\n");
+  if (json_output) {
+    printf("] }\n");
+  } else {
+    printf("\n");
+  }
+  fflush(stdout);
 
   // Accept connections
   RecvStream_t * recv_stream = magic_endpoint_recv_stream_default();
@@ -61,7 +82,13 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice)
   char * recv_str = malloc(read + 1);
   memcpy(recv_str, recv_buffer, read);
   recv_str[read] = '\0';
-  printf("received: '%s'\n", recv_str);
+  if (json_output) {
+    printf("{ \"type\": \"server\", \"status\": \"received\", \"data\": \"%s\" }\n", recv_str);
+  } else {
+    printf("received: '%s'\n", recv_str);
+  }
+
+  fflush(stdout);
 
   // Cleanup
   free(recv_str);
@@ -198,7 +225,11 @@ main (int argc, char const * const argv[])
     free(addrs);
 
   } else if (strcmp(argv[1], "server") == 0) {
-    int ret = run_server(&config, alpn_slice);
+    bool json_output = false;
+    if (argc > 2 && strcmp(argv[2], "--json") == 0) {
+      json_output = true;
+    }
+    int ret = run_server(&config, alpn_slice, json_output);
     if (ret != 0) {
       return ret;
     }
