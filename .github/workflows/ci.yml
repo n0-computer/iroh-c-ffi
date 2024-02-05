@@ -1,0 +1,112 @@
+name: CI
+
+on:
+    pull_request:
+    push:
+        branches:
+            - main
+
+concurrency:
+    group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    build_and_test_nix:
+        name: Build and test
+        timeout-minutes: 30
+        runs-on: ${{ matrix.runner }}
+        strategy:
+            fail-fast: false
+            matrix:
+                name: [ubuntu-latest, macOS-arm-latest]
+                rust: [stable]
+                include:
+                    - name: ubuntu-latest
+                      os: ubuntu-latest
+                      release-os: linux
+                      release-arch: amd64
+                      runner: [self-hosted, linux, X64]
+                    - name: macOS-arm-latest
+                      os: macOS-latest
+                      release-os: darwin
+                      release-arch: aarch64
+                      runner: [self-hosted, macOS, ARM64]
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+            - name: Install ${{ matrix.rust }} rust
+              uses: dtolnay/rust-toolchain@master
+              with:
+                toolchain: ${{ matrix.rust }}
+            - name: Install cargo-nextest
+              uses: taiki-e/install-action@v2
+              with:
+                tool: nextest
+            - name: run tests
+              run: |
+                cargo nextest run --workspace --all-features --lib --bins --tests --no-fail-fast
+              env:
+                RUST_LOG: "TRACE"
+
+    cargo_deny:
+        timeout-minutes: 30
+        name: cargo deny
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v3
+            - uses: EmbarkStudios/cargo-deny-action@v1
+              with:
+                arguments: --workspace --all-features
+                command: check
+                command-arguments: "-Dwarnings"
+    
+    check_fmt_and_docs:
+        timeout-minutes: 30
+        name: Checking fmt and docs
+        runs-on: ubuntu-latest
+        env:
+            RUSTC_WRAPPER: "sccache"
+            SCCACHE_GHA_ENABLED: "on"
+        steps:
+        - uses: actions/checkout@master
+    
+        - uses: dtolnay/rust-toolchain@stable
+          with:
+            components: rustfmt
+    
+        - name: Install sccache
+          uses: mozilla-actions/sccache-action@v0.0.3
+    
+        - name: fmt
+          run: cargo fmt --all -- --check
+    
+        - name: Docs
+          run: cargo doc --workspace --all-features --no-deps --document-private-items
+    
+    clippy_check:
+        timeout-minutes: 30
+        runs-on: ubuntu-latest
+        env:
+            RUSTC_WRAPPER: "sccache"
+            SCCACHE_GHA_ENABLED: "on"
+        steps:
+        - uses: actions/checkout@master
+        # Can be switched back to stable once 1.75 lands
+        # https://github.com/rust-lang/cargo/issues/12115#issuecomment-1768170381
+        - uses: dtolnay/rust-toolchain@master
+          with:
+            toolchain: nightly-2023-12-06
+            components: clippy
+        - name: Install sccache
+          uses: mozilla-actions/sccache-action@v0.0.3
+    
+        # TODO: We have a bunch of platform-dependent code so should
+        #    probably run this job on the full platform matrix
+        - name: clippy check (all features)
+          run: cargo clippy --workspace --all-features --all-targets --bins --tests --benches
+    
+        - name: clippy check (no features)
+          run: cargo clippy --workspace --no-default-features --lib --bins --tests
+    
+        - name: clippy check (default features)
+          run: cargo clippy --workspace --all-targets
