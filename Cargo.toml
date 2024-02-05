@@ -1,0 +1,24 @@
+[package]
+name = "iroh-net-ffi"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = [
+  "staticlib",  # Ensure it gets compiled as a (static) C library
+  "cdylib",     # If you want a shared/dynamic C library (advanced)
+  "lib",        # For `generate-headers` and other downstream rust dependents
+                # such as integration `tests/`, doctests, and `examples/`
+]
+
+[[bin]]
+name = "generate_headers"
+required-features = ["headers"]  # Do not build unless generating headers.
+
+[dependencies]
+iroh-net = "0.12.0"
+safer-ffi = { version = "0.1.5" }
+
+[features]
+# generate headers
+headers = ["safer-ffi/headers"]
