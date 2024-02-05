@@ -9,6 +9,10 @@
 int
 main (int argc, char const * const argv[])
 {
+  if (argc < 2) {
+    fprintf(stderr, "Usage: must supply at least client or server\n");
+    return -1;
+  }
 
   // setup magic endpoint configuration
 
@@ -38,6 +42,10 @@ main (int argc, char const * const argv[])
     // Print details
     NodeAddr_t my_addr = node_addr_default();
     int addr_res = magic_endpoint_my_addr(&ep, &my_addr);
+    if (addr_res != 0) {
+      fprintf(stderr, "faile to get my address");
+      return -1;
+    }
     char * node_id_str = public_key_as_base32(&my_addr.node_id);
     char * derp_url_str = url_as_str(my_addr.derp_url);
     printf(
@@ -55,8 +63,6 @@ main (int argc, char const * const argv[])
     printf("\n");
 
     // Accept connections
-
-
 
     // Cleanup
     rust_free_string(derp_url_str);
