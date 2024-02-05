@@ -53,7 +53,7 @@ jobs:
                 cargo run --features headers --bin generate_headers --release
             - name: build test binary
               run: |
-                cc -o main{,.c} -L target/release -l iroh_net_ffi -lSystem -lc -lm
+                cc -o main{,.c} -L target/release -l iroh_net_ffi -lc -lm
             - name: test run
               run: |
                 ./main server --json > server_output.json &
