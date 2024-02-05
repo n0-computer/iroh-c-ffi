@@ -21,7 +21,9 @@ impl From<NodeAddr> for iroh_net::magic_endpoint::NodeAddr {
         iroh_net::magic_endpoint::NodeAddr {
             node_id: addr.node_id.into(),
             info: iroh_net::magic_endpoint::AddrInfo {
-                derp_url: addr.derp_url.map(|u| u.url.clone()),
+                derp_url: addr
+                    .derp_url
+                    .map(|u| u.url.clone().expect("url not initialized")),
                 direct_addresses,
             },
         }
@@ -39,7 +41,10 @@ impl From<iroh_net::magic_endpoint::NodeAddr> for NodeAddr {
             .into();
         NodeAddr {
             node_id: addr.node_id.into(),
-            derp_url: addr.info.derp_url.map(|url| Box::new(Url { url }).into()),
+            derp_url: addr
+                .info
+                .derp_url
+                .map(|url| Box::new(Url { url: Some(url) }).into()),
             direct_addresses,
         }
     }
@@ -118,12 +123,49 @@ pub fn socket_addr_as_str(addr: &SocketAddr) -> char_p::Box {
     addr.addr.to_string().try_into().unwrap()
 }
 
+#[ffi_export]
+pub fn socket_addr_default() -> repr_c::Box<SocketAddr> {
+    Box::new(SocketAddr {
+        addr: std::net::SocketAddr::V4(std::net::SocketAddrV4::new(
+            std::net::Ipv4Addr::UNSPECIFIED,
+            0,
+        )),
+    })
+    .into()
+}
+
+#[ffi_export]
+pub fn socket_addr_free(addr: repr_c::Box<SocketAddr>) {
+    drop(addr);
+}
+
+/// Try to parse a url from a string.
+#[ffi_export]
+pub fn socket_addr_from_string(
+    input: char_p::Ref<'_>,
+    out: &mut repr_c::Box<SocketAddr>,
+) -> AddrResult {
+    match input.to_str().parse::<std::net::SocketAddr>() {
+        Ok(addr) => {
+            out.addr = addr;
+            AddrResult::Ok
+        }
+        Err(_err) => AddrResult::InvalidSocketAddr,
+    }
+}
+
 /// Represents a valid URL.
 #[derive_ReprC]
 #[repr(opaque)]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Url {
-    url: url::Url,
+    url: Option<url::Url>,
+}
+
+/// Creates an initialized but invalid Url.
+#[ffi_export]
+pub fn url_default() -> repr_c::Box<Url> {
+    Box::<Url>::default().into()
 }
 
 /// Formats the given url as a string
@@ -131,5 +173,34 @@ pub struct Url {
 /// Result must be freed with `rust_free_string`
 #[ffi_export]
 pub fn url_as_str(url: &Url) -> char_p::Box {
-    url.url.to_string().try_into().unwrap()
+    url.url
+        .as_ref()
+        .expect("url not initialized")
+        .to_string()
+        .try_into()
+        .unwrap()
+}
+
+#[derive_ReprC]
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum AddrResult {
+    /// Everything is ok.
+    Ok = 0,
+    /// Url was invalid.
+    InvalidUrl,
+    /// SocketAddr was invalid.
+    InvalidSocketAddr,
+}
+
+/// Try to parse a url from a string.
+#[ffi_export]
+pub fn url_from_string(input: char_p::Ref<'_>, out: &mut repr_c::Box<Url>) -> AddrResult {
+    match input.to_str().parse::<url::Url>() {
+        Ok(url) => {
+            out.url.replace(url);
+            AddrResult::Ok
+        }
+        Err(_err) => AddrResult::InvalidUrl,
+    }
 }

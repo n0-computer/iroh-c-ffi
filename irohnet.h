@@ -448,7 +448,7 @@ public_key_as_base32 (
 /** \brief
  *  Generate a default (invalid) public key.
  *
- *  Result must be freed using `publi_key_free`.
+ *  Result must be freed using `public_key_free`.
  */
 PublicKey_t
 public_key_default (void);
@@ -559,6 +559,47 @@ char *
 socket_addr_as_str (
     SocketAddr_t const * addr);
 
+/** <No documentation available> */
+SocketAddr_t *
+socket_addr_default (void);
+
+/** <No documentation available> */
+void
+socket_addr_free (
+    SocketAddr_t * addr);
+
+/** <No documentation available> */
+/** \remark Has the same ABI as `uint8_t` **/
+#ifdef DOXYGEN
+typedef
+#endif
+enum AddrResult {
+    /** \brief
+     *  Everything is ok.
+     */
+    ADDR_RESULT_OK = 0,
+    /** \brief
+     *  Url was invalid.
+     */
+    ADDR_RESULT_INVALID_URL,
+    /** \brief
+     *  SocketAddr was invalid.
+     */
+    ADDR_RESULT_INVALID_SOCKET_ADDR,
+}
+#ifndef DOXYGEN
+; typedef uint8_t
+#endif
+AddrResult_t;
+
+/** \brief
+ *  Try to parse a url from a string.
+ */
+AddrResult_t
+socket_addr_from_string (
+    char const * input,
+    SocketAddr_t * * out);
+
 /** \brief
  *  Formats the given url as a string
  *
@@ -567,6 +608,20 @@ socket_addr_as_str (
 char *
 url_as_str (
     Url_t const * url);
+
+/** \brief
+ *  Creates an initialized but invalid Url.
+ */
+Url_t *
+url_default (void);
+
+/** \brief
+ *  Try to parse a url from a string.
+ */
+AddrResult_t
+url_from_string (
+    char const * input,
+    Url_t * * out);
 
 
 #ifdef __cplusplus

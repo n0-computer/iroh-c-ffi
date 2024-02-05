@@ -40,7 +40,7 @@ pub fn public_key_as_base32(key: &PublicKey) -> char_p::Box {
 
 /// Generate a default (invalid) public key.
 ///
-/// Result must be freed using `publi_key_free`.
+/// Result must be freed using `public_key_free`.
 #[ffi_export]
 pub fn public_key_default() -> PublicKey {
     PublicKey::default()
