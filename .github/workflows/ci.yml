@@ -51,6 +51,8 @@ jobs:
               run: |
                 cargo build --release
                 cargo run --features headers --bin generate_headers --release
+            - name: build test binary
+              run: |
                 cc -o main{,.c} -L target/release -l iroh_net_ffi -lSystem -lc -lm
             - name: test run
               run: |
@@ -93,6 +95,7 @@ jobs:
                 # Check if the diff_output is not empty
                 if [[ -n "$diff_output" ]]; then
                     echo "Error: Differences were found compared to the checked in headers"
+                    echo $diff_output
                     exit 1
                 fi
               env:
