@@ -54,7 +54,7 @@ typedef struct slice_ref_uint8 {
 } slice_ref_uint8_t;
 
 /** <No documentation available> */
-typedef struct RecvStream RecvStream_t;
+typedef struct Connection Connection_t;
 
 /** \brief
  *  Result of dealing with a magic endpoint.
@@ -88,11 +88,27 @@ enum MagicEndpointResult {
      *  Error while sending data.
      */
     MAGIC_ENDPOINT_RESULT_SEND_ERROR,
+    /** \brief
+     *  Error while reading data.
+     */
+    MAGIC_ENDPOINT_RESULT_READ_ERROR,
 }
 #ifndef DOXYGEN
 ; typedef uint8_t
 #endif
 MagicEndpointResult_t;
+
+/** \brief
+ *  Accept a new connection on this endpoint.
+ */
+MagicEndpointResult_t
+magic_endpoint_accept (
+    MagicEndpoint_t * const * ep,
+    slice_ref_uint8_t expected_alpn,
+    Connection_t * * out);
+
+/** <No documentation available> */
+typedef struct RecvStream RecvStream_t;
 
 /** \brief
  *  Accept a new connection and uni directinal stream on this endpoint.
@@ -264,6 +280,14 @@ typedef struct NodeAddr {
 } NodeAddr_t;
 
 /** <No documentation available> */
+MagicEndpointResult_t
+magic_endpoint_connect (
+    MagicEndpoint_t * const * ep,
+    slice_ref_uint8_t alpn,
+    NodeAddr_t node_addr,
+    Connection_t * * out);
+
+/** <No documentation available> */
 typedef struct SendStream SendStream_t;
 
 /** <No documentation available> */
@@ -273,6 +297,43 @@ magic_endpoint_connect_uni (
     slice_ref_uint8_t alpn,
     NodeAddr_t node_addr,
     SendStream_t * * out);
+
+/** \brief
+ *  Result must be freed using `magic_endpoint_connection_free`.
+ */
+Connection_t *
+magic_endpoint_connection_default (void);
+
+/** <No documentation available> */
+void
+magic_endpoint_connection_free (
+    Connection_t * conn);
+
+/** \brief
+ *  Returns the maximum datagram size. `0` if it is not supported.
+ */
+size_t
+magic_endpoint_connection_max_datagram_size (
+    Connection_t * const * connection);
+
+/** \brief
+ *  Read an unreliabla datgram.
+ *
+ *  Data must not be larger than the available `max_datagram` size.
+ */
+MagicEndpointResult_t
+magic_endpoint_connection_read_datagram (
+    Connection_t * const * connection,
+    Vec_uint8_t * data);
+
+/** \brief
+ *  Send an unreliabla datgram.
+ *  Data must not be larger than the available `max_datagram` size.
+ */
+MagicEndpointResult_t
+magic_endpoint_connection_write_datagram (
+    Connection_t * const * connection,
+    slice_ref_uint8_t data);
 
 /** \brief
  *  Generate a default endpoint.
@@ -493,6 +554,27 @@ KeyResult_t
 public_key_from_base32 (
     char const * raw_key,
     PublicKey_t * out);
+
+/** \brief
+ *  Allocates a buffer managed by rust, given the initial size.
+ */
+Vec_uint8_t
+rust_buffer_alloc (
+    size_t size);
+
+/** \brief
+ *  Frees the rust buffer.
+ */
+void
+rust_buffer_free (
+    Vec_uint8_t buf);
+
+/** \brief
+ *  Returns the length of the buffer.
+ */
+size_t
+rust_buffer_len (
+    Vec_uint8_t const * buf);
 
 /** \brief
  *  Frees a Rust-allocated string.
