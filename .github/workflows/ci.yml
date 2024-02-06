@@ -153,8 +153,9 @@ jobs:
                 cargo run --features headers --bin generate_headers --release
             - name: build test binary
               run: |
-                rustc --crate-type=staticlib --print=native-static-libs -</dev/null
-                gcc -o main.exe main.c -L target/release -liroh_net_ffi -lm
+                # rustc --crate-type=staticlib --print=native-static-libs -</dev/null
+                # gcc -o main.exe main.c -L target/release -liroh_net_ffi -lm
+                cl /Fe:main main.c /link target/release/iroh_net_ffi.lib
               env:
                 LD_LIBRARY_PATH: target/release
 
