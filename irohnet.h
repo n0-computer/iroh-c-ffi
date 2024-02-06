@@ -357,6 +357,16 @@ magic_endpoint_my_addr (
     NodeAddr_t * out);
 
 /** \brief
+ *  Let the endpoint know that the underlying network conditions might have changed.
+ *
+ *  This really only needs to be called on android,
+ *  Ref https://developer.android.com/training/monitoring-device-state/connectivity-status-type
+ */
+void
+magic_endpoint_network_change (
+    MagicEndpoint_t * const * ep);
+
+/** \brief
  *  Must be freed using `magic_endpoint_recv_stream_free`
  */
 RecvStream_t *

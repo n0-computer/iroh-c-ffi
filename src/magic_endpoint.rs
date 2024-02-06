@@ -83,6 +83,21 @@ pub fn magic_endpoint_free(ep: repr_c::Box<MagicEndpoint>) {
     drop(ep);
 }
 
+/// Let the endpoint know that the underlying network conditions might have changed.
+///
+/// This really only needs to be called on android,
+/// Ref https://developer.android.com/training/monitoring-device-state/connectivity-status-type
+#[ffi_export]
+pub fn magic_endpoint_network_change(ep: &repr_c::Box<MagicEndpoint>) {
+    TOKIO_EXECUTOR.block_on(async move {
+        ep.ep
+            .as_ref()
+            .expect("endpoint not initialized")
+            .network_change()
+            .await;
+    });
+}
+
 /// An endpoint that leverages a quic endpoint, backed by a magic socket.
 #[derive_ReprC]
 #[repr(opaque)]
