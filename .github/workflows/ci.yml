@@ -123,7 +123,7 @@ jobs:
                 include:
                     - name: windows-latest
                       os: windows
-                      runner: [windows-latest] # need to move to self-hosted
+                      runner: [self-hosted, windows, x64]
         steps:
             - name: Checkout
               uses: actions/checkout@v4
