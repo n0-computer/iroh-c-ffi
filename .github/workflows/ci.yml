@@ -109,6 +109,55 @@ jobs:
               env:
                 CARGO_CRATE_NAME: iroh-net-ffi
 
+    build_and_test_windows:
+        name: Build and test
+        timeout-minutes: 30
+        runs-on: ${{ matrix.runner }}
+        strategy:
+            fail-fast: false
+            matrix:
+                name: [windows-latest]
+                rust: [stable]
+                target:
+                    - x86_64-pc-windows-msvc
+                include:
+                    - name: windows-latest
+                      os: windows
+                      runner: [windows-latest] # need to move to self-hosted
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+            - name: Install ${{ matrix.rust }}
+              run: |
+                rustup toolchain install ${{ matrix.rust }}
+                rustup toolchain default ${{ matrix.rust }}
+                rustup target add ${{ matrix.target }}
+                rustup set default-host ${{ matrix.target }}
+            - name: Install cargo-nextest
+              shell: powershell
+              run: |
+                $tmp = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
+                Invoke-WebRequest -OutFile $tmp https://get.nexte.st/latest/windows
+                $outputDir = if ($Env:CARGO_HOME) { Join-Path $Env:CARGO_HOME "bin" } else { "~/.cargo/bin" }
+                $tmp | Expand-Archive -DestinationPath $outputDir -Force
+                $tmp | Remove-Item
+            - uses: msys2/setup-msys2@v2
+            - name: run tests
+              run: |
+                cargo nextest run --all-features --lib --bins --tests --no-fail-fast
+              env:
+                RUST_LOG: "TRACE"
+            - name: build
+              run: |
+                cargo build --release
+                cargo run --features headers --bin generate_headers --release
+            - name: build test binary
+              run: |
+                cc -o main{,.c} -L target/release -l iroh_net_ffi -lc -lm
+              env:
+                LD_LIBRARY_PATH: target/release
+
+
     cargo_deny:
         timeout-minutes: 30
         name: cargo deny
