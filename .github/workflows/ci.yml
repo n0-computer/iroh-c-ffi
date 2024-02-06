@@ -57,6 +57,8 @@ jobs:
               env:
                 LD_LIBRARY_PATH: target/release
             - name: test run
+              env:
+                LD_LIBRARY_PATH: target/release
               run: |
                 ./main server --json > server_output.json &
                 # Wait for the server to start
