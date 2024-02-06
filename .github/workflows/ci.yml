@@ -92,6 +92,7 @@ jobs:
                 fi
                 echo "Success"
             - name: check headers
+              shell: bash
               run: |
                 cp irohnet.h irohnet.h.orig
                 echo "Running generate_headers"
