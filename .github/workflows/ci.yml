@@ -62,7 +62,7 @@ jobs:
               run: |
                 ./main server --json > server_output.json &
                 # Wait for the server to start
-                sleep 2
+                sleep 3
                 # Read the second line of the file
                 line=$(sed -n '2p' server_output.json)
                 
@@ -97,9 +97,9 @@ jobs:
                 echo "Running generate_headers"
                 ./target/release/generate_headers
                 echo "Checking diff of irohnet.h"
-                diff_output=$(diff irohnet.h irohnet.h.orig)
+                diff_output="$(diff irohnet.h irohnet.h.orig)"                
                 # Check if the diff_output is not empty
-                if [[ -z "$diff_output" ]]; then
+                if [[ -n "$diff_output" ]]; then
                     echo "Error: Differences were found compared to the checked in headers"
                     echo "$diff_output"
                     exit 1
