@@ -54,6 +54,8 @@ jobs:
             - name: build test binary
               run: |
                 cc -o main{,.c} -L target/release -l iroh_net_ffi -lc -lm
+              env:
+                LD_LIBRARY_PATH: target/release
             - name: test run
               run: |
                 ./main server --json > server_output.json &
