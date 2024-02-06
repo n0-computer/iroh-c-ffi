@@ -107,6 +107,8 @@ pub enum MagicEndpointResult {
     AddrError,
     /// Error while sending data.
     SendError,
+    /// Error while reading data.
+    ReadError,
 }
 
 #[ffi_export]
@@ -277,6 +279,124 @@ pub fn magic_endpoint_accept_uni(
     }
 }
 
+#[derive_ReprC]
+#[repr(opaque)]
+#[derive(Debug, Default)]
+pub struct Connection {
+    connection: Option<quinn::Connection>,
+}
+
+/// Result must be freed using `magic_endpoint_connection_free`.
+#[ffi_export]
+pub fn magic_endpoint_connection_default() -> repr_c::Box<Connection> {
+    Box::<Connection>::default().into()
+}
+
+#[ffi_export]
+pub fn magic_endpoint_connection_free(conn: repr_c::Box<Connection>) {
+    drop(conn);
+}
+
+/// Send an unreliabla datgram.
+/// Data must not be larger than the available `max_datagram` size.
+#[ffi_export]
+pub fn magic_endpoint_connection_write_datagram(
+    connection: &repr_c::Box<Connection>,
+    data: slice::slice_ref<'_, u8>,
+) -> MagicEndpointResult {
+    // TODO: is there a way to avoid this allocation?
+    let data = bytes::Bytes::copy_from_slice(data.as_ref());
+    let res = connection
+        .connection
+        .as_ref()
+        .expect("connection not initialized")
+        .send_datagram(data);
+
+    match res {
+        Ok(()) => MagicEndpointResult::Ok,
+        Err(_err) => {
+            dbg!(_err);
+            MagicEndpointResult::SendError
+        }
+    }
+}
+
+/// Read an unreliabla datgram.
+///
+/// Data must not be larger than the available `max_datagram` size.
+#[ffi_export]
+pub fn magic_endpoint_connection_read_datagram(
+    connection: &repr_c::Box<Connection>,
+    data: &mut vec::Vec<u8>,
+) -> MagicEndpointResult {
+    let res = TOKIO_EXECUTOR.block_on(async move {
+        connection
+            .connection
+            .as_ref()
+            .expect("connection not initialized")
+            .read_datagram()
+            .await
+    });
+
+    match res {
+        Ok(bytes) => {
+            data.with_rust_mut(|v| {
+                v.resize(bytes.len(), 0u8);
+                v.copy_from_slice(&bytes);
+            });
+            MagicEndpointResult::Ok
+        }
+        Err(_err) => {
+            dbg!(_err);
+            MagicEndpointResult::ReadError
+        }
+    }
+}
+
+/// Returns the maximum datagram size. `0` if it is not supported.
+#[ffi_export]
+pub fn magic_endpoint_connection_max_datagram_size(connection: &repr_c::Box<Connection>) -> usize {
+    connection
+        .connection
+        .as_ref()
+        .expect("connection not initialized")
+        .max_datagram_size()
+        .unwrap_or(0)
+}
+
+/// Accept a new connection on this endpoint.
+#[ffi_export]
+pub fn magic_endpoint_accept(
+    ep: &repr_c::Box<MagicEndpoint>,
+    expected_alpn: slice::slice_ref<'_, u8>,
+    out: &mut repr_c::Box<Connection>,
+) -> MagicEndpointResult {
+    let res = TOKIO_EXECUTOR.block_on(async move {
+        let conn = ep
+            .ep
+            .as_ref()
+            .expect("endpoint not initalized")
+            .accept()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
+        let (remote_node_id, alpn, connection) = iroh_net::magic_endpoint::accept_conn(conn)
+            .await
+            .context("accept_conn")?;
+        if alpn.as_bytes() != expected_alpn.as_slice() {
+            anyhow::bail!("unexpected alpn {}", alpn);
+        }
+        anyhow::Ok((remote_node_id, connection))
+    });
+
+    match res {
+        Ok((_remote_node_id, connection)) => {
+            out.connection.replace(connection);
+            MagicEndpointResult::Ok
+        }
+        Err(_err) => MagicEndpointResult::AcceptUniFailed,
+    }
+}
+
 #[ffi_export]
 pub fn magic_endpoint_connect_uni(
     ep: &repr_c::Box<MagicEndpoint>,
@@ -300,6 +420,34 @@ pub fn magic_endpoint_connect_uni(
     match res {
         Ok(stream) => {
             out.stream.replace(stream);
+            MagicEndpointResult::Ok
+        }
+        Err(_err) => MagicEndpointResult::ConnectUniError,
+    }
+}
+
+#[ffi_export]
+pub fn magic_endpoint_connect(
+    ep: &repr_c::Box<MagicEndpoint>,
+    alpn: slice::slice_ref<'_, u8>,
+    node_addr: NodeAddr,
+    out: &mut repr_c::Box<Connection>,
+) -> MagicEndpointResult {
+    let res = TOKIO_EXECUTOR.block_on(async move {
+        let node_addr = node_addr.into();
+        let conn = ep
+            .ep
+            .as_ref()
+            .expect("endpoint not initialized")
+            .connect(node_addr, alpn.as_ref())
+            .await?;
+
+        anyhow::Ok(conn)
+    });
+
+    match res {
+        Ok(connection) => {
+            out.connection.replace(connection);
             MagicEndpointResult::Ok
         }
         Err(_err) => MagicEndpointResult::ConnectUniError,
@@ -332,12 +480,12 @@ pub fn magic_endpoint_my_addr(
 
 #[cfg(test)]
 mod tests {
-    use crate::addr::node_addr_default;
+    use crate::{addr::node_addr_default, util::rust_buffer_alloc};
 
     use super::*;
 
     #[test]
-    fn basic_ops() {
+    fn stream_uni() {
         let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
         // create config
         let mut config_server = magic_endpoint_config_default();
@@ -404,6 +552,80 @@ mod tests {
 
             let finish_res = magic_endpoint_send_stream_finish(send_stream);
             assert_eq!(finish_res, MagicEndpointResult::Ok);
+        });
+
+        server_thread.join().unwrap();
+        client_thread.join().unwrap();
+    }
+
+    #[test]
+    fn datagram() {
+        let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
+        // create config
+        let mut config_server = magic_endpoint_config_default();
+        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
+
+        let mut config_client = magic_endpoint_config_default();
+        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
+
+        let (s, r) = std::sync::mpsc::channel();
+        let (server_s, server_r) = std::sync::mpsc::channel();
+
+        // setup server
+        let alpn_s = alpn.clone();
+        let server_thread = std::thread::spawn(move || {
+            // create magic endpoint and bind
+            let mut ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_server, 0, &mut ep);
+            assert_eq!(bind_res, MagicEndpointResult::Ok);
+
+            let mut node_addr = node_addr_default();
+            let res = magic_endpoint_my_addr(&ep, &mut node_addr);
+            assert_eq!(res, MagicEndpointResult::Ok);
+
+            s.send(node_addr).unwrap();
+
+            // accept connection
+            println!("[s] accepting conn");
+            let mut conn = magic_endpoint_connection_default();
+            let accept_res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            assert_eq!(accept_res, MagicEndpointResult::Ok);
+
+            println!("[s] reading");
+
+            let mut recv_buffer = rust_buffer_alloc(1024);
+            let read_res = magic_endpoint_connection_read_datagram(&conn, &mut recv_buffer);
+            assert_eq!(read_res, MagicEndpointResult::Ok);
+            assert_eq!(std::str::from_utf8(&recv_buffer).unwrap(), "hello world");
+            server_s.send(()).unwrap();
+        });
+
+        // setup client
+        let client_thread = std::thread::spawn(move || {
+            // create magic endpoint and bind
+            let mut ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_client, 0, &mut ep);
+            assert_eq!(bind_res, MagicEndpointResult::Ok);
+
+            // wait for addr from server
+            let node_addr = r.recv().unwrap();
+
+            println!("[c] dialing");
+            // connect to server
+            let mut conn = magic_endpoint_connection_default();
+            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+            assert_eq!(connect_res, MagicEndpointResult::Ok);
+
+            println!("[c] sending");
+            let max_datagram = magic_endpoint_connection_max_datagram_size(&conn);
+            assert!(max_datagram > 0);
+            dbg!(max_datagram);
+            let send_res =
+                magic_endpoint_connection_write_datagram(&mut conn, b"hello world"[..].into());
+            assert_eq!(send_res, MagicEndpointResult::Ok);
+
+            // wait for the server to have received
+            server_r.recv().unwrap();
         });
 
         server_thread.join().unwrap();
