@@ -99,7 +99,7 @@ jobs:
                 echo "Checking diff of irohnet.h"
                 diff_output=$(diff irohnet.h irohnet.h.orig)
                 # Check if the diff_output is not empty
-                if [[ -n "$diff_output" ]]; then
+                if [[ -z "$diff_output" ]]; then
                     echo "Error: Differences were found compared to the checked in headers"
                     echo "$diff_output"
                     exit 1
