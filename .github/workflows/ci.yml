@@ -119,7 +119,7 @@ jobs:
                 name: [windows-latest]
                 rust: [stable]
                 target:
-                    - x86_64-pc-windows-msvc
+                    - x86_64-pc-windows-gnu
                 include:
                     - name: windows-latest
                       os: windows
@@ -154,8 +154,9 @@ jobs:
             - name: build test binary
               run: |
                 # rustc --crate-type=staticlib --print=native-static-libs -</dev/null
-                # gcc -o main.exe main.c -L target/release -liroh_net_ffi -lm
-                cl /Fe:main main.c /link target/release/iroh_net_ffi.lib
+                gcc -o main.exe main.c -L target/release -liroh_net_ffi -lm -lkernel32 -ladvapi32 -lbcrypt -lntdll -luserenv -lws2_32 -lmsvcrt
+                # clang main.c -o main -L target/release -liroh_net_ffi -lkernel32 -ladvapi32 -lbcrypt -lntdll -luserenv -lws2_32 -lmsvcrt
+                # clang /Fe:main main.c /link target/release/iroh_net_ffi.lib
               env:
                 LD_LIBRARY_PATH: target/release
 
