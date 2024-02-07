@@ -149,8 +149,8 @@ jobs:
                 RUST_LOG: "TRACE"
             - name: build
               run: |
-                cargo build --release
-                cargo run --features headers --bin generate_headers --release
+                cargo build --release --target ${{ matrix.target }}
+                cargo run --features headers --bin generate_headers --release --target ${{ matrix.target }}
             - name: build test binary
               run: |
                 # rustc --crate-type=staticlib --print=native-static-libs -</dev/null
