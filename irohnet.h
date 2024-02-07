@@ -7,8 +7,8 @@
  *                                         *
  *******************************************/
 
-#ifndef __RUST_IROH-NET-FFI__
-#define __RUST_IROH-NET-FFI__
+#ifndef __RUST_IROH_NET_FFI__
+#define __RUST_IROH_NET_FFI__
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -628,4 +628,4 @@ url_from_string (
 } /* extern \"C\" */
 #endif
 
-#endif /* __RUST_IROH-NET-FFI__ */
+#endif /* __RUST_IROH_NET_FFI__ */
