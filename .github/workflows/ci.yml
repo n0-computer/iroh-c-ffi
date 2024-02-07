@@ -34,7 +34,7 @@ jobs:
         steps:
             - name: checkout
               uses: actions/checkout@v4
-              
+
             - name: Install ${{ matrix.rust }} rust
               uses: dtolnay/rust-toolchain@master
               with:
@@ -158,6 +158,39 @@ jobs:
                 gcc -o main.exe main.c -L target/x86_64-pc-windows-gnu/release -liroh_net_ffi -lm -lkernel32 -ladvapi32 -lbcrypt -lntdll -luserenv -lws2_32 -lmsvcrt
               env:
                 LD_LIBRARY_PATH: target/release
+            - name: test run
+              run: |
+                Start-Process -NoNewWindow -FilePath "./main.exe" -ArgumentList "server", "--json" -RedirectStandardOutput "server_output.json"
+                # Wait for the server to start
+                Start-Sleep -Seconds 3
+                # Read the second line of the file
+                $line = Get-Content server_output.json | Select-Object -Index 1
+                
+                # Check if the line is empty
+                if ([string]::IsNullOrEmpty($line)) {
+                    Write-Output "Error: server_output.json does not have at least 2 lines"
+                    exit 1
+                }
+                # Parse the JSON
+                $json_output = ConvertFrom-Json $line
+                
+                # Store variables
+                $node_id = $json_output.node_id
+                $derp = $json_output.derp
+                $addrs = $json_output.addrs
+                & "./main" "client" $node_id $derp $addrs
+                Start-Sleep -Seconds 1
+                
+                # Read the last line of the file
+                $last_line = Get-Content server_output.json | Select-Object -Last 1
+                # Parse the JSON
+                $json_output = ConvertFrom-Json $last_line
+                # Ensure json_output is as expected
+                if ($json_output.data -ne "hello world from C") {
+                    Write-Output "Error: Unexpected output"
+                    exit 1
+                }
+                Write-Output "Success"
 
 
     cargo_deny:
