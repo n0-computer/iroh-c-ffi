@@ -98,8 +98,7 @@ jobs:
                 echo "Running generate_headers"
                 ./target/release/generate_headers
                 echo "Generating diff of irohnet.h"
-                diff_output="$(diff irohnet.h irohnet.h.orig)"
-                echo $diff_output
+                diff_output="$(diff irohnet.h irohnet.h.orig)" || true
                 echo "Checking diff"
                 # Check if the diff_output is not empty
                 if [ -n "$diff_output" ]; then
