@@ -154,7 +154,8 @@ jobs:
             - name: build test binary
               run: |
                 # rustc --crate-type=staticlib --print=native-static-libs -</dev/null
-                gcc -o main.exe main.c -L target/release -liroh_net_ffi -lm -lkernel32 -ladvapi32 -lbcrypt -lntdll -luserenv -lws2_32 -lmsvcrt
+                cp target/x86_64-pc-windows-gnu/release/iroh_net_ffi.dll iroh_net_ffi.dll
+                gcc -o main.exe main.c -L target/x86_64-pc-windows-gnu/release -liroh_net_ffi -lm -lkernel32 -ladvapi32 -lbcrypt -lntdll -luserenv -lws2_32 -lmsvcrt
                 # clang main.c -o main -L target/release -liroh_net_ffi -lkernel32 -ladvapi32 -lbcrypt -lntdll -luserenv -lws2_32 -lmsvcrt
                 # clang /Fe:main main.c /link target/release/iroh_net_ffi.lib
               env:
