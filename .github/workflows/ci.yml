@@ -108,7 +108,7 @@ jobs:
                     exit 1
                 fi
               env:
-                CARGO_CRATE_NAME: iroh-net-ffi
+                CARGO_CRATE_NAME: iroh_net_ffi
 
     build_and_test_windows:
         name: Build and test
