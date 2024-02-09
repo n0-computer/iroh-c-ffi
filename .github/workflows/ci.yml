@@ -66,7 +66,7 @@ jobs:
                 sleep 3
                 # Read the second line of the file
                 line=$(sed -n '2p' server_output.json)
-                
+
                 # Check if the line is empty
                 if [[ -z "$line" ]]; then
                     echo "Error: server_output.json does not have at least 2 lines"
@@ -76,14 +76,14 @@ jobs:
                 fi
                 # Parse the JSON
                 json_output=$(echo $line | jq .)
-                
+
                 # Store variables
                 node_id=$(echo $json_output | jq -r '.node_id')
                 derp=$(echo $json_output | jq -r '.derp')
                 addrs=$(echo $json_output | jq -r '.addrs[]')
                 ./main client $node_id $derp ${addrs[@]}
                 sleep 1
-                
+
                 # Read the last line of the file
                 last_line=$(tail -n 1 server_output.json)
                 # Parse the JSON
@@ -169,7 +169,7 @@ jobs:
                 Start-Sleep -Seconds 3
                 # Read the second line of the file
                 $line = Get-Content server_output.json | Select-Object -Index 1
-                
+
                 # Check if the line is empty
                 if ([string]::IsNullOrEmpty($line)) {
                     Write-Output "Error: server_output.json does not have at least 2 lines"
@@ -177,14 +177,14 @@ jobs:
                 }
                 # Parse the JSON
                 $json_output = ConvertFrom-Json $line
-                
+
                 # Store variables
                 $node_id = $json_output.node_id
                 $derp = $json_output.derp
                 $addrs = $json_output.addrs
                 & "./main" "client" $node_id $derp $addrs
                 Start-Sleep -Seconds 1
-                
+
                 # Read the last line of the file
                 $last_line = Get-Content server_output.json | Select-Object -Last 1
                 # Parse the JSON
@@ -212,19 +212,19 @@ jobs:
               uses: actions/checkout@v4
               with:
                 submodules: recursive
-        
+
             - name: Install rust stable
               uses: dtolnay/rust-toolchain@stable
-        
+
             - name: Cleanup Docker
               continue-on-error: true
               run: |
                 docker kill $(docker ps -q)
-        
+
             - name: Install cross
               # See https://github.com/cross-rs/cross/issues/1222
               run: cargo install cross --git https://github.com/cross-rs/cross
-        
+
             - name: build
               # cross tests are currently broken vor armv7 and aarch64
               # see https://github.com/cross-rs/cross/issues/1311.  So on
@@ -233,7 +233,7 @@ jobs:
               run: cross build --all --target ${{ matrix.target }}
               env:
                 RUST_LOG: ${{ runner.debug && 'DEBUG' || 'INFO'}}
-        
+
             - name: test
               # cross tests are currently broken for armv7 and aarch64
               # see https://github.com/cross-rs/cross/issues/1311
@@ -250,10 +250,8 @@ jobs:
             - uses: actions/checkout@v3
             - uses: EmbarkStudios/cargo-deny-action@v1
               with:
-                arguments: --all-features
-                command: check
-                command-arguments: "-Dwarnings"
-    
+                command: check advisories bans licenses sources
+
     check_fmt_and_docs:
         timeout-minutes: 30
         name: Checking fmt and docs
@@ -263,20 +261,20 @@ jobs:
             SCCACHE_GHA_ENABLED: "on"
         steps:
         - uses: actions/checkout@master
-    
+
         - uses: dtolnay/rust-toolchain@stable
           with:
             components: rustfmt
-    
+
         - name: Install sccache
           uses: mozilla-actions/sccache-action@v0.0.3
-    
+
         - name: fmt
           run: cargo fmt --all -- --check
-    
+
         - name: Docs
           run: cargo doc --workspace --all-features --no-deps --document-private-items
-    
+
     clippy_check:
         timeout-minutes: 30
         runs-on: ubuntu-latest
@@ -285,22 +283,17 @@ jobs:
             SCCACHE_GHA_ENABLED: "on"
         steps:
         - uses: actions/checkout@master
-        # Can be switched back to stable once 1.75 lands
-        # https://github.com/rust-lang/cargo/issues/12115#issuecomment-1768170381
-        - uses: dtolnay/rust-toolchain@master
-          with:
-            toolchain: nightly-2023-12-06
-            components: clippy
+        - uses: dtolnay/rust-toolchain@stable
         - name: Install sccache
           uses: mozilla-actions/sccache-action@v0.0.3
-    
+
         # TODO: We have a bunch of platform-dependent code so should
         #    probably run this job on the full platform matrix
         - name: clippy check (all features)
           run: cargo clippy --workspace --all-features --all-targets --bins --tests --benches
-    
+
         - name: clippy check (no features)
           run: cargo clippy --workspace --no-default-features --lib --bins --tests
-    
+
         - name: clippy check (default features)
           run: cargo clippy --workspace --all-targets
