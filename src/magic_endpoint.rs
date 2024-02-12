@@ -194,6 +194,45 @@ pub fn magic_endpoint_accept_uni(
     }
 }
 
+/// Accept a new connection and a bi stream on this endpoint.
+///
+/// Blocks the current thread.
+#[ffi_export]
+pub fn magic_endpoint_accept_bi(
+    ep: &repr_c::Box<MagicEndpoint>,
+    expected_alpn: slice::slice_ref<'_, u8>,
+    send: &mut repr_c::Box<SendStream>,
+    recv: &mut repr_c::Box<RecvStream>,
+) -> MagicEndpointResult {
+    let res = TOKIO_EXECUTOR.block_on(async move {
+        let conn = ep
+            .ep
+            .as_ref()
+            .expect("endpoint not initalized")
+            .accept()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
+        let (remote_node_id, alpn, connection) = iroh_net::magic_endpoint::accept_conn(conn)
+            .await
+            .context("accept_conn")?;
+        if alpn.as_bytes() != expected_alpn.as_slice() {
+            anyhow::bail!("unexpected alpn {}", alpn);
+        }
+        let (send_stream, recv_stream) = connection.accept_bi().await.context("accept_uni")?;
+
+        anyhow::Ok((remote_node_id, send_stream, recv_stream))
+    });
+
+    match res {
+        Ok((_remote_node_id, send_stream, recv_stream)) => {
+            send.stream.replace(send_stream);
+            recv.stream.replace(recv_stream);
+            MagicEndpointResult::Ok
+        }
+        Err(_err) => MagicEndpointResult::AcceptUniFailed,
+    }
+}
+
 /// An established connection.
 #[derive_ReprC]
 #[repr(opaque)]
@@ -345,6 +384,40 @@ pub fn magic_endpoint_connect_uni(
     match res {
         Ok(stream) => {
             out.stream.replace(stream);
+            MagicEndpointResult::Ok
+        }
+        Err(_err) => MagicEndpointResult::ConnectUniError,
+    }
+}
+
+/// Connect the given node and establish a bi directional connection.
+///
+/// Blocks the current thread until the connection is established.
+#[ffi_export]
+pub fn magic_endpoint_connect_bi(
+    ep: &repr_c::Box<MagicEndpoint>,
+    alpn: slice::slice_ref<'_, u8>,
+    node_addr: NodeAddr,
+    send: &mut repr_c::Box<SendStream>,
+    recv: &mut repr_c::Box<RecvStream>,
+) -> MagicEndpointResult {
+    let res = TOKIO_EXECUTOR.block_on(async move {
+        let node_addr = node_addr.into();
+        let conn = ep
+            .ep
+            .as_ref()
+            .expect("endpoint not initialized")
+            .connect(node_addr, alpn.as_ref())
+            .await?;
+        let (send_stream, recv_stream) = conn.open_bi().await?;
+
+        anyhow::Ok((send_stream, recv_stream))
+    });
+
+    match res {
+        Ok((send_stream, recv_stream)) => {
+            send.stream.replace(send_stream);
+            recv.stream.replace(recv_stream);
             MagicEndpointResult::Ok
         }
         Err(_err) => MagicEndpointResult::ConnectUniError,
@@ -560,6 +633,103 @@ mod tests {
 
             // wait for the server to have received
             server_r.recv().unwrap();
+        });
+
+        server_thread.join().unwrap();
+        client_thread.join().unwrap();
+    }
+
+    #[test]
+    fn stream_bi() {
+        let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
+        // create config
+        let mut config_server = magic_endpoint_config_default();
+        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
+
+        let mut config_client = magic_endpoint_config_default();
+        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
+
+        let (s, r) = std::sync::mpsc::channel();
+
+        // setup server
+        let alpn_s = alpn.clone();
+        let server_thread = std::thread::spawn(move || {
+            // create magic endpoint and bind
+            let mut ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_server, 0, &mut ep);
+            assert_eq!(bind_res, MagicEndpointResult::Ok);
+
+            let mut node_addr = node_addr_default();
+            let res = magic_endpoint_my_addr(&ep, &mut node_addr);
+            assert_eq!(res, MagicEndpointResult::Ok);
+
+            s.send(node_addr).unwrap();
+
+            // accept connection
+            println!("[s] accepting conn");
+            let mut send_stream = send_stream_default();
+            let mut recv_stream = recv_stream_default();
+            let accept_res =
+                magic_endpoint_accept_bi(&ep, alpn_s.as_ref(), &mut send_stream, &mut recv_stream);
+            assert_eq!(accept_res, MagicEndpointResult::Ok);
+
+            println!("[s] reading");
+
+            let mut recv_buffer = vec![0u8; 1024];
+            let read_res = recv_stream_read(&mut recv_stream, (&mut recv_buffer[..]).into());
+            assert!(read_res > 0);
+            assert_eq!(
+                std::str::from_utf8(&recv_buffer[..read_res as usize]).unwrap(),
+                "hello world"
+            );
+
+            println!("[s] sending");
+            let send_res = send_stream_write(&mut send_stream, b"hello client"[..].into());
+            assert_eq!(send_res, MagicEndpointResult::Ok);
+
+            let res = send_stream_finish(send_stream);
+            assert_eq!(res, MagicEndpointResult::Ok);
+        });
+
+        // setup client
+        let client_thread = std::thread::spawn(move || {
+            // create magic endpoint and bind
+            let mut ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_client, 0, &mut ep);
+            assert_eq!(bind_res, MagicEndpointResult::Ok);
+
+            // wait for addr from server
+            let node_addr = r.recv().unwrap();
+
+            println!("[c] dialing");
+            // connect to server
+            let mut send_stream = send_stream_default();
+            let mut recv_stream = recv_stream_default();
+            let connect_res = magic_endpoint_connect_bi(
+                &ep,
+                alpn.as_ref(),
+                node_addr,
+                &mut send_stream,
+                &mut recv_stream,
+            );
+            assert_eq!(connect_res, MagicEndpointResult::Ok);
+
+            println!("[c] sending");
+            let send_res = send_stream_write(&mut send_stream, b"hello world"[..].into());
+            assert_eq!(send_res, MagicEndpointResult::Ok);
+
+            println!("[c] reading");
+
+            let mut recv_buffer = vec![0u8; 1024];
+            let read_res = recv_stream_read(&mut recv_stream, (&mut recv_buffer[..]).into());
+            assert!(read_res > 0);
+            assert_eq!(
+                std::str::from_utf8(&recv_buffer[..read_res as usize]).unwrap(),
+                "hello client"
+            );
+
+            let finish_res = send_stream_finish(send_stream);
+            assert_eq!(finish_res, MagicEndpointResult::Ok);
         });
 
         server_thread.join().unwrap();
