@@ -125,9 +125,26 @@ magic_endpoint_accept (
     Connection_t * * out);
 
 /** \brief
+ *  A stream that can only be used to send data
+ */
+typedef struct SendStream SendStream_t;
+
+/** \brief
  *  A stream that can only be used to receive data.
  */
 typedef struct RecvStream RecvStream_t;
+
+/** \brief
+ *  Accept a new connection and a bi stream on this endpoint.
+ *
+ *  Blocks the current thread.
+ */
+MagicEndpointResult_t
+magic_endpoint_accept_bi (
+    MagicEndpoint_t * const * ep,
+    slice_ref_uint8_t expected_alpn,
+    SendStream_t * * send,
+    RecvStream_t * * recv);
 
 /** \brief
  *  Accept a new connection and a uni directional stream on this endpoint.
@@ -314,9 +331,17 @@ magic_endpoint_connect (
     Connection_t * * out);
 
 /** \brief
- *  A stream that can only be used to send data
+ *  Connect the given node and establish a bi directional connection.
+ *
+ *  Blocks the current thread until the connection is established.
  */
-typedef struct SendStream SendStream_t;
+MagicEndpointResult_t
+magic_endpoint_connect_bi (
+    MagicEndpoint_t * const * ep,
+    slice_ref_uint8_t alpn,
+    NodeAddr_t node_addr,
+    SendStream_t * * send,
+    RecvStream_t * * recv);
 
 /** \brief
  *  Connect the given node and establish a uni directional connection.
