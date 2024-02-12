@@ -157,36 +157,28 @@ pub fn magic_endpoint_bind(
     })
 }
 
-/// Accept a new connection and a uni directional stream on this endpoint.
+/// Accepts a uni directional stream on this connection.
 ///
 /// Blocks the current thread.
 #[ffi_export]
-pub fn magic_endpoint_accept_uni(
-    ep: &repr_c::Box<MagicEndpoint>,
-    expected_alpn: slice::slice_ref<'_, u8>,
+pub fn connection_accept_uni(
+    conn: &repr_c::Box<Connection>,
     out: &mut repr_c::Box<RecvStream>,
 ) -> MagicEndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
-        let conn = ep
-            .ep
+        let recv_stream = conn
+            .connection
             .as_ref()
-            .expect("endpoint not initalized")
-            .accept()
+            .expect("connection not initialized")
+            .accept_uni()
             .await
-            .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
-        let (remote_node_id, alpn, connection) = iroh_net::magic_endpoint::accept_conn(conn)
-            .await
-            .context("accept_conn")?;
-        if alpn.as_bytes() != expected_alpn.as_slice() {
-            anyhow::bail!("unexpected alpn {}", alpn);
-        }
-        let recv_stream = connection.accept_uni().await.context("accept_uni")?;
+            .context("accept_uni")?;
 
-        anyhow::Ok((remote_node_id, recv_stream))
+        anyhow::Ok(recv_stream)
     });
 
     match res {
-        Ok((_remote_node_id, recv_stream)) => {
+        Ok(recv_stream) => {
             out.stream.replace(recv_stream);
             MagicEndpointResult::Ok
         }
@@ -194,37 +186,29 @@ pub fn magic_endpoint_accept_uni(
     }
 }
 
-/// Accept a new connection and a bi stream on this endpoint.
+/// Accept a bi directional stream on this endpoint.
 ///
 /// Blocks the current thread.
 #[ffi_export]
-pub fn magic_endpoint_accept_bi(
-    ep: &repr_c::Box<MagicEndpoint>,
-    expected_alpn: slice::slice_ref<'_, u8>,
+pub fn connection_accept_bi(
+    conn: &repr_c::Box<Connection>,
     send: &mut repr_c::Box<SendStream>,
     recv: &mut repr_c::Box<RecvStream>,
 ) -> MagicEndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
-        let conn = ep
-            .ep
+        let (send_stream, recv_stream) = conn
+            .connection
             .as_ref()
-            .expect("endpoint not initalized")
-            .accept()
+            .expect("connection not initialized")
+            .accept_bi()
             .await
-            .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
-        let (remote_node_id, alpn, connection) = iroh_net::magic_endpoint::accept_conn(conn)
-            .await
-            .context("accept_conn")?;
-        if alpn.as_bytes() != expected_alpn.as_slice() {
-            anyhow::bail!("unexpected alpn {}", alpn);
-        }
-        let (send_stream, recv_stream) = connection.accept_bi().await.context("accept_uni")?;
+            .context("accept_uni")?;
 
-        anyhow::Ok((remote_node_id, send_stream, recv_stream))
+        anyhow::Ok((send_stream, recv_stream))
     });
 
     match res {
-        Ok((_remote_node_id, send_stream, recv_stream)) => {
+        Ok((send_stream, recv_stream)) => {
             send.stream.replace(send_stream);
             recv.stream.replace(recv_stream);
             MagicEndpointResult::Ok
@@ -362,25 +346,21 @@ pub fn magic_endpoint_accept(
     }
 }
 
-/// Connect the given node and establish a uni directional connection.
+/// Establish a uni directional connection.
 ///
 /// Blocks the current thread until the connection is established.
 #[ffi_export]
-pub fn magic_endpoint_connect_uni(
-    ep: &repr_c::Box<MagicEndpoint>,
-    alpn: slice::slice_ref<'_, u8>,
-    node_addr: NodeAddr,
+pub fn connection_open_uni(
+    conn: &repr_c::Box<Connection>,
     out: &mut repr_c::Box<SendStream>,
 ) -> MagicEndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
-        let node_addr = node_addr.into();
-        let conn = ep
-            .ep
+        let stream = conn
+            .connection
             .as_ref()
-            .expect("endpoint not initialized")
-            .connect(node_addr, alpn.as_ref())
+            .expect("connection not initialized")
+            .open_uni()
             .await?;
-        let stream = conn.open_uni().await?;
 
         anyhow::Ok(stream)
     });
@@ -394,26 +374,22 @@ pub fn magic_endpoint_connect_uni(
     }
 }
 
-/// Connect the given node and establish a bi directional connection.
+/// Establish a bi directional connection.
 ///
 /// Blocks the current thread until the connection is established.
 #[ffi_export]
-pub fn magic_endpoint_connect_bi(
-    ep: &repr_c::Box<MagicEndpoint>,
-    alpn: slice::slice_ref<'_, u8>,
-    node_addr: NodeAddr,
+pub fn connection_open_bi(
+    conn: &repr_c::Box<Connection>,
     send: &mut repr_c::Box<SendStream>,
     recv: &mut repr_c::Box<RecvStream>,
 ) -> MagicEndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
-        let node_addr = node_addr.into();
-        let conn = ep
-            .ep
+        let (send_stream, recv_stream) = conn
+            .connection
             .as_ref()
-            .expect("endpoint not initialized")
-            .connect(node_addr, alpn.as_ref())
+            .expect("connection not initialized")
+            .open_bi()
             .await?;
-        let (send_stream, recv_stream) = conn.open_bi().await?;
 
         anyhow::Ok((send_stream, recv_stream))
     });
@@ -525,8 +501,12 @@ mod tests {
 
             // accept connection
             println!("[s] accepting conn");
+            let mut conn = connection_default();
+            let accept_res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            assert_eq!(accept_res, MagicEndpointResult::Ok);
+
             let mut recv_stream = recv_stream_default();
-            let accept_res = magic_endpoint_accept_uni(&ep, alpn_s.as_ref(), &mut recv_stream);
+            let accept_res = connection_accept_uni(&conn, &mut recv_stream);
             assert_eq!(accept_res, MagicEndpointResult::Ok);
 
             println!("[s] reading");
@@ -552,10 +532,13 @@ mod tests {
 
             println!("[c] dialing");
             // connect to server
-            let mut send_stream = send_stream_default();
-            let connect_res =
-                magic_endpoint_connect_uni(&ep, alpn.as_ref(), node_addr, &mut send_stream);
+            let mut conn = connection_default();
+            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
             assert_eq!(connect_res, MagicEndpointResult::Ok);
+
+            let mut send_stream = send_stream_default();
+            let open_res = connection_open_uni(&conn, &mut send_stream);
+            assert_eq!(open_res, MagicEndpointResult::Ok);
 
             println!("[c] sending");
             let send_res = send_stream_write(&mut send_stream, b"hello world"[..].into());
@@ -670,10 +653,13 @@ mod tests {
 
             // accept connection
             println!("[s] accepting conn");
+            let mut conn = connection_default();
+            let res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            assert_eq!(res, MagicEndpointResult::Ok);
+
             let mut send_stream = send_stream_default();
             let mut recv_stream = recv_stream_default();
-            let accept_res =
-                magic_endpoint_accept_bi(&ep, alpn_s.as_ref(), &mut send_stream, &mut recv_stream);
+            let accept_res = connection_accept_bi(&conn, &mut send_stream, &mut recv_stream);
             assert_eq!(accept_res, MagicEndpointResult::Ok);
 
             println!("[s] reading");
@@ -706,16 +692,14 @@ mod tests {
 
             println!("[c] dialing");
             // connect to server
+            let mut conn = connection_default();
+            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+            assert_eq!(connect_res, MagicEndpointResult::Ok);
+
             let mut send_stream = send_stream_default();
             let mut recv_stream = recv_stream_default();
-            let connect_res = magic_endpoint_connect_bi(
-                &ep,
-                alpn.as_ref(),
-                node_addr,
-                &mut send_stream,
-                &mut recv_stream,
-            );
-            assert_eq!(connect_res, MagicEndpointResult::Ok);
+            let open_res = connection_open_bi(&conn, &mut send_stream, &mut recv_stream);
+            assert_eq!(open_res, MagicEndpointResult::Ok);
 
             println!("[c] sending");
             let send_res = send_stream_write(&mut send_stream, b"hello world"[..].into());

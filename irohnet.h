@@ -19,35 +19,18 @@ extern "C" {
 typedef struct Connection Connection_t;
 
 /** \brief
- *  Result must be freed using `connection_free`.
+ *  A stream that can only be used to send data
  */
-Connection_t *
-connection_default (void);
+typedef struct SendStream SendStream_t;
 
 /** \brief
- *  Frees the connection.
+ *  A stream that can only be used to receive data.
  */
-void
-connection_free (
-    Connection_t * conn);
+typedef struct RecvStream RecvStream_t;
 
 
 #include <stddef.h>
 #include <stdint.h>
-
-/** \brief
- *  Same as [`Vec<T>`][`rust::Vec`], but with guaranteed `#[repr(C)]` layout
- */
-typedef struct Vec_uint8 {
-    /** <No documentation available> */
-    uint8_t * ptr;
-
-    /** <No documentation available> */
-    size_t len;
-
-    /** <No documentation available> */
-    size_t cap;
-} Vec_uint8_t;
 
 /** \brief
  *  Result of dealing with a magic endpoint.
@@ -90,6 +73,75 @@ enum MagicEndpointResult {
 ; typedef uint8_t
 #endif
 MagicEndpointResult_t;
+
+/** \brief
+ *  Accept a bi directional stream on this endpoint.
+ *
+ *  Blocks the current thread.
+ */
+MagicEndpointResult_t
+connection_accept_bi (
+    Connection_t * const * conn,
+    SendStream_t * * send,
+    RecvStream_t * * recv);
+
+/** \brief
+ *  Accepts a uni directional stream on this connection.
+ *
+ *  Blocks the current thread.
+ */
+MagicEndpointResult_t
+connection_accept_uni (
+    Connection_t * const * conn,
+    RecvStream_t * * out);
+
+/** \brief
+ *  Result must be freed using `connection_free`.
+ */
+Connection_t *
+connection_default (void);
+
+/** \brief
+ *  Frees the connection.
+ */
+void
+connection_free (
+    Connection_t * conn);
+
+/** \brief
+ *  Establish a bi directional connection.
+ *
+ *  Blocks the current thread until the connection is established.
+ */
+MagicEndpointResult_t
+connection_open_bi (
+    Connection_t * const * conn,
+    SendStream_t * * send,
+    RecvStream_t * * recv);
+
+/** \brief
+ *  Establish a uni directional connection.
+ *
+ *  Blocks the current thread until the connection is established.
+ */
+MagicEndpointResult_t
+connection_open_uni (
+    Connection_t * const * conn,
+    SendStream_t * * out);
+
+/** \brief
+ *  Same as [`Vec<T>`][`rust::Vec`], but with guaranteed `#[repr(C)]` layout
+ */
+typedef struct Vec_uint8 {
+    /** <No documentation available> */
+    uint8_t * ptr;
+
+    /** <No documentation available> */
+    size_t len;
+
+    /** <No documentation available> */
+    size_t cap;
+} Vec_uint8_t;
 
 /** \brief
  *  Reads a datgram.
@@ -166,39 +218,6 @@ magic_endpoint_accept (
     MagicEndpoint_t * const * ep,
     slice_ref_uint8_t expected_alpn,
     Connection_t * * out);
-
-/** \brief
- *  A stream that can only be used to send data
- */
-typedef struct SendStream SendStream_t;
-
-/** \brief
- *  A stream that can only be used to receive data.
- */
-typedef struct RecvStream RecvStream_t;
-
-/** \brief
- *  Accept a new connection and a bi stream on this endpoint.
- *
- *  Blocks the current thread.
- */
-MagicEndpointResult_t
-magic_endpoint_accept_bi (
-    MagicEndpoint_t * const * ep,
-    slice_ref_uint8_t expected_alpn,
-    SendStream_t * * send,
-    RecvStream_t * * recv);
-
-/** \brief
- *  Accept a new connection and a uni directional stream on this endpoint.
- *
- *  Blocks the current thread.
- */
-MagicEndpointResult_t
-magic_endpoint_accept_uni (
-    MagicEndpoint_t * const * ep,
-    slice_ref_uint8_t expected_alpn,
-    RecvStream_t * * out);
 
 /** \brief
  *  The options to configure derp.
@@ -358,31 +377,6 @@ magic_endpoint_connect (
     slice_ref_uint8_t alpn,
     NodeAddr_t node_addr,
     Connection_t * * out);
-
-/** \brief
- *  Connect the given node and establish a bi directional connection.
- *
- *  Blocks the current thread until the connection is established.
- */
-MagicEndpointResult_t
-magic_endpoint_connect_bi (
-    MagicEndpoint_t * const * ep,
-    slice_ref_uint8_t alpn,
-    NodeAddr_t node_addr,
-    SendStream_t * * send,
-    RecvStream_t * * recv);
-
-/** \brief
- *  Connect the given node and establish a uni directional connection.
- *
- *  Blocks the current thread until the connection is established.
- */
-MagicEndpointResult_t
-magic_endpoint_connect_uni (
-    MagicEndpoint_t * const * ep,
-    slice_ref_uint8_t alpn,
-    NodeAddr_t node_addr,
-    SendStream_t * * out);
 
 /** \brief
  *  Returns the maximum datagram size. `0` if it is not supported.

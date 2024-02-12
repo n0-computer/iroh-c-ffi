@@ -61,10 +61,17 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
   fflush(stdout);
 
   // Accept connections
-  RecvStream_t * recv_stream = recv_stream_default();
-  int res = magic_endpoint_accept_uni(&ep, alpn_slice, &recv_stream);
+  Connection_t * conn = connection_default();
+  int res = magic_endpoint_accept(&ep, alpn_slice, &conn);
   if (res != 0) {
     fprintf(stderr, "failed to accept connection");
+    return -1;
+  }
+
+  RecvStream_t * recv_stream = recv_stream_default();
+  res = connection_accept_uni(&conn, &recv_stream);
+  if (res != 0) {
+    fprintf(stderr, "failed to accept stream");
     return -1;
   }
 
@@ -86,6 +93,11 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
     printf("{ \"type\": \"server\", \"status\": \"received\", \"data\": \"%s\" }\n", recv_str);
   } else {
     printf("received: '%s'\n", recv_str);
+
+    // print rtt
+    uint64_t rtt = connection_rtt(&conn);
+    printf("Estimated RTT: %llu ms\n", rtt);
+
   }
 
   fflush(stdout);
@@ -97,6 +109,7 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
   rust_free_string(derp_url_str);
   rust_free_string(node_id_str);
   node_addr_free(my_addr);
+  connection_free(conn);
   magic_endpoint_free(ep);
 
   return 0;
@@ -154,10 +167,17 @@ run_client (
   }
 
   // connect
-  SendStream_t * send_stream = send_stream_default();
-  ret = magic_endpoint_connect_uni(&ep, alpn_slice, node_addr, &send_stream);
+  Connection_t * conn = connection_default();
+  ret = magic_endpoint_connect(&ep, alpn_slice, node_addr, &conn);
   if (ret != 0) {
     fprintf(stderr, "failed to connect to server\n");
+    return -1;
+  }
+
+  SendStream_t * send_stream = send_stream_default();
+  ret = connection_open_uni(&conn, &send_stream);
+  if (ret != 0) {
+    fprintf(stderr, "failed to establish stream\n");
     return -1;
   }
 
@@ -179,6 +199,13 @@ run_client (
     fprintf(stderr, "failed to finish sending\n");
     return -1;
   }
+
+  // print rtt
+  uint64_t rtt = connection_rtt(&conn);
+  printf("Estimated RTT: %llu ms\n", rtt);
+
+  // cleanup
+  connection_free(conn);
 
   return 0;
 }
