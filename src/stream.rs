@@ -25,6 +25,17 @@ pub fn recv_stream_free(stream: repr_c::Box<RecvStream>) {
     drop(stream);
 }
 
+/// Unique stream id.
+#[ffi_export]
+pub fn recv_stream_id(stream: &repr_c::Box<RecvStream>) -> u64 {
+    stream
+        .stream
+        .as_ref()
+        .expect("recvstream not initialized")
+        .id()
+        .0
+}
+
 /// Receive data on this stream.
 ///
 /// Blocks the current thread.
@@ -70,6 +81,17 @@ pub fn send_stream_free(stream: repr_c::Box<SendStream>) {
     drop(stream);
 }
 
+/// Unique stream id.
+#[ffi_export]
+pub fn send_stream_id(stream: &repr_c::Box<SendStream>) -> u64 {
+    stream
+        .stream
+        .as_ref()
+        .expect("sendstream not initialized")
+        .id()
+        .0
+}
+
 /// Send data on the stream.
 ///
 /// Blocks the current thread.
@@ -111,6 +133,9 @@ pub fn send_stream_finish(mut stream: repr_c::Box<SendStream>) -> MagicEndpointR
 
     match res {
         Ok(()) => MagicEndpointResult::Ok,
-        Err(_err) => MagicEndpointResult::SendError,
+        Err(_err) => {
+            dbg!(_err);
+            MagicEndpointResult::SendError
+        }
     }
 }

@@ -253,11 +253,21 @@ pub fn connection_free(conn: repr_c::Box<Connection>) {
     drop(conn);
 }
 
+/// Estimated roundtrip time for the current connection in milli seconds.
+#[ffi_export]
+pub fn connection_rtt(conn: &repr_c::Box<Connection>) -> u64 {
+    conn.connection
+        .as_ref()
+        .expect("connection not initialized")
+        .rtt()
+        .as_millis() as u64
+}
+
 /// Send a single datgram (unreliably).
 ///
 /// Data must not be larger than the available `max_datagram` size.
 #[ffi_export]
-pub fn magic_endpoint_connection_write_datagram(
+pub fn connection_write_datagram(
     connection: &repr_c::Box<Connection>,
     data: slice::slice_ref<'_, u8>,
 ) -> MagicEndpointResult {
@@ -271,10 +281,7 @@ pub fn magic_endpoint_connection_write_datagram(
 
     match res {
         Ok(()) => MagicEndpointResult::Ok,
-        Err(_err) => {
-            dbg!(_err);
-            MagicEndpointResult::SendError
-        }
+        Err(_err) => MagicEndpointResult::SendError,
     }
 }
 
@@ -284,7 +291,7 @@ pub fn magic_endpoint_connection_write_datagram(
 ///
 /// Blocks the current thread until a datagram is received.
 #[ffi_export]
-pub fn magic_endpoint_connection_read_datagram(
+pub fn connection_read_datagram(
     connection: &repr_c::Box<Connection>,
     data: &mut vec::Vec<u8>,
 ) -> MagicEndpointResult {
@@ -305,10 +312,7 @@ pub fn magic_endpoint_connection_read_datagram(
             });
             MagicEndpointResult::Ok
         }
-        Err(_err) => {
-            dbg!(_err);
-            MagicEndpointResult::ReadError
-        }
+        Err(_err) => MagicEndpointResult::ReadError,
     }
 }
 
@@ -601,7 +605,7 @@ mod tests {
             println!("[s] reading");
 
             let mut recv_buffer = rust_buffer_alloc(1024);
-            let read_res = magic_endpoint_connection_read_datagram(&conn, &mut recv_buffer);
+            let read_res = connection_read_datagram(&conn, &mut recv_buffer);
             assert_eq!(read_res, MagicEndpointResult::Ok);
             assert_eq!(std::str::from_utf8(&recv_buffer).unwrap(), "hello world");
             server_s.send(()).unwrap();
@@ -627,8 +631,7 @@ mod tests {
             let max_datagram = magic_endpoint_connection_max_datagram_size(&conn);
             assert!(max_datagram > 0);
             dbg!(max_datagram);
-            let send_res =
-                magic_endpoint_connection_write_datagram(&mut conn, b"hello world"[..].into());
+            let send_res = connection_write_datagram(&mut conn, b"hello world"[..].into());
             assert_eq!(send_res, MagicEndpointResult::Ok);
 
             // wait for the server to have received

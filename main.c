@@ -61,7 +61,7 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
   fflush(stdout);
 
   // Accept connections
-  RecvStream_t * recv_stream = magic_endpoint_recv_stream_default();
+  RecvStream_t * recv_stream = recv_stream_default();
   int res = magic_endpoint_accept_uni(&ep, alpn_slice, &recv_stream);
   if (res != 0) {
     fprintf(stderr, "failed to accept connection");
@@ -72,7 +72,7 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
   slice_mut_uint8_t recv_buffer_slice;
   recv_buffer_slice.ptr = recv_buffer;
   recv_buffer_slice.len = 512;
-  int read = magic_endpoint_recv_stream_read(&recv_stream, recv_buffer_slice);
+  int read = recv_stream_read(&recv_stream, recv_buffer_slice);
   if (read == -1) {
     fprintf(stderr, "failed to read data");
     return -1;
@@ -93,7 +93,7 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
   // Cleanup
   free(recv_str);
   free(recv_buffer);
-  magic_endpoint_recv_stream_free(recv_stream);
+  recv_stream_free(recv_stream);
   rust_free_string(derp_url_str);
   rust_free_string(node_id_str);
   node_addr_free(my_addr);
@@ -154,7 +154,7 @@ run_client (
   }
 
   // connect
-  SendStream_t * send_stream = magic_endpoint_send_stream_default();
+  SendStream_t * send_stream = send_stream_default();
   ret = magic_endpoint_connect_uni(&ep, alpn_slice, node_addr, &send_stream);
   if (ret != 0) {
     fprintf(stderr, "failed to connect to server\n");
@@ -167,14 +167,14 @@ run_client (
   buffer.ptr = (uint8_t *) &data[0];
   buffer.len = strlen(data);
 
-  ret = magic_endpoint_send_stream_write(&send_stream, buffer);
+  ret = send_stream_write(&send_stream, buffer);
   if (ret != 0) {
     fprintf(stderr, "failed to send data\n");
     return -1;
   }
 
   // finish
-  ret = magic_endpoint_send_stream_finish(send_stream);
+  ret = send_stream_finish(send_stream);
   if (ret != 0) {
     fprintf(stderr, "failed to finish sending\n");
     return -1;

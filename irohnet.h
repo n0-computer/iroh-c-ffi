@@ -31,45 +31,23 @@ void
 connection_free (
     Connection_t * conn);
 
-/** \brief
- *  An endpoint that leverages a quic endpoint, backed by a magic socket.
- */
-typedef struct MagicEndpoint MagicEndpoint_t;
-
 
 #include <stddef.h>
 #include <stdint.h>
 
 /** \brief
- *  `&'lt [T]` but with a guaranteed `#[repr(C)]` layout.
- *
- *  # C layout (for some given type T)
- *
- *  ```c
- *  typedef struct {
- *  // Cannot be NULL
- *  T * ptr;
- *  size_t len;
- *  } slice_T;
- *  ```
- *
- *  # Nullable pointer?
- *
- *  If you want to support the above typedef, but where the `ptr` field is
- *  allowed to be `NULL` (with the contents of `len` then being undefined)
- *  use the `Option< slice_ptr<_> >` type.
+ *  Same as [`Vec<T>`][`rust::Vec`], but with guaranteed `#[repr(C)]` layout
  */
-typedef struct slice_ref_uint8 {
-    /** \brief
-     *  Pointer to the first element (if any).
-     */
-    uint8_t const * ptr;
+typedef struct Vec_uint8 {
+    /** <No documentation available> */
+    uint8_t * ptr;
 
-    /** \brief
-     *  Element count
-     */
+    /** <No documentation available> */
     size_t len;
-} slice_ref_uint8_t;
+
+    /** <No documentation available> */
+    size_t cap;
+} Vec_uint8_t;
 
 /** \brief
  *  Result of dealing with a magic endpoint.
@@ -112,6 +90,71 @@ enum MagicEndpointResult {
 ; typedef uint8_t
 #endif
 MagicEndpointResult_t;
+
+/** \brief
+ *  Reads a datgram.
+ *
+ *  Data must not be larger than the available `max_datagram` size.
+ *
+ *  Blocks the current thread until a datagram is received.
+ */
+MagicEndpointResult_t
+connection_read_datagram (
+    Connection_t * const * connection,
+    Vec_uint8_t * data);
+
+/** \brief
+ *  Estimated roundtrip time for the current connection in milli seconds.
+ */
+uint64_t
+connection_rtt (
+    Connection_t * const * conn);
+
+/** \brief
+ *  `&'lt [T]` but with a guaranteed `#[repr(C)]` layout.
+ *
+ *  # C layout (for some given type T)
+ *
+ *  ```c
+ *  typedef struct {
+ *  // Cannot be NULL
+ *  T * ptr;
+ *  size_t len;
+ *  } slice_T;
+ *  ```
+ *
+ *  # Nullable pointer?
+ *
+ *  If you want to support the above typedef, but where the `ptr` field is
+ *  allowed to be `NULL` (with the contents of `len` then being undefined)
+ *  use the `Option< slice_ptr<_> >` type.
+ */
+typedef struct slice_ref_uint8 {
+    /** \brief
+     *  Pointer to the first element (if any).
+     */
+    uint8_t const * ptr;
+
+    /** \brief
+     *  Element count
+     */
+    size_t len;
+} slice_ref_uint8_t;
+
+/** \brief
+ *  Send a single datgram (unreliably).
+ *
+ *  Data must not be larger than the available `max_datagram` size.
+ */
+MagicEndpointResult_t
+connection_write_datagram (
+    Connection_t * const * connection,
+    slice_ref_uint8_t data);
+
+/** \brief
+ *  An endpoint that leverages a quic endpoint, backed by a magic socket.
+ */
+typedef struct MagicEndpoint MagicEndpoint_t;
 
 /** \brief
  *  Accept a new connection on this endpoint.
@@ -178,20 +221,6 @@ enum DerpMode {
 ; typedef uint8_t
 #endif
 DerpMode_t;
-
-/** \brief
- *  Same as [`Vec<T>`][`rust::Vec`], but with guaranteed `#[repr(C)]` layout
- */
-typedef struct Vec_uint8 {
-    /** <No documentation available> */
-    uint8_t * ptr;
-
-    /** <No documentation available> */
-    size_t len;
-
-    /** <No documentation available> */
-    size_t cap;
-} Vec_uint8_t;
 
 /** \brief
  *  Same as [`Vec<T>`][`rust::Vec`], but with guaranteed `#[repr(C)]` layout
@@ -363,28 +392,6 @@ magic_endpoint_connection_max_datagram_size (
     Connection_t * const * connection);
 
 /** \brief
- *  Reads a datgram.
- *
- *  Data must not be larger than the available `max_datagram` size.
- *
- *  Blocks the current thread until a datagram is received.
- */
-MagicEndpointResult_t
-magic_endpoint_connection_read_datagram (
-    Connection_t * const * connection,
-    Vec_uint8_t * data);
-
-/** \brief
- *  Send a single datgram (unreliably).
- *
- *  Data must not be larger than the available `max_datagram` size.
- */
-MagicEndpointResult_t
-magic_endpoint_connection_write_datagram (
-    Connection_t * const * connection,
-    slice_ref_uint8_t data);
-
-/** \brief
  *  Generate a default endpoint.
  *
  *  Must be freed using `magic_endpoint_free`.
@@ -548,6 +555,13 @@ recv_stream_free (
     RecvStream_t * stream);
 
 /** \brief
+ *  Unique stream id.
+ */
+uint64_t
+recv_stream_id (
+    RecvStream_t * const * stream);
+
+/** \brief
  *  `&'lt mut [T]` but with a guaranteed `#[repr(C)]` layout.
  *
  *  # C layout (for some given type T)
@@ -690,6 +704,13 @@ send_stream_finish (
 void
 send_stream_free (
     SendStream_t * stream);
+
+/** \brief
+ *  Unique stream id.
+ */
+uint64_t
+send_stream_id (
+    SendStream_t * const * stream);
 
 /** \brief
  *  Send data on the stream.
