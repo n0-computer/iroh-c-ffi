@@ -636,6 +636,7 @@ mod tests {
         magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
 
         let (s, r) = std::sync::mpsc::channel();
+        let (client_s, client_r) = std::sync::mpsc::channel();
 
         // setup server
         let alpn_s = alpn.clone();
@@ -678,6 +679,7 @@ mod tests {
 
             let res = send_stream_finish(send_stream);
             assert_eq!(res, MagicEndpointResult::Ok);
+            client_r.recv().unwrap();
         });
 
         // setup client
@@ -717,6 +719,7 @@ mod tests {
 
             let finish_res = send_stream_finish(send_stream);
             assert_eq!(finish_res, MagicEndpointResult::Ok);
+            client_s.send(()).unwrap();
         });
 
         server_thread.join().unwrap();
