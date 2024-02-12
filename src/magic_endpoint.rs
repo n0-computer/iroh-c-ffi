@@ -5,6 +5,7 @@ use safer_ffi::{prelude::*, slice, vec};
 
 use crate::addr::NodeAddr;
 use crate::key::{secret_key_generate, SecretKey};
+use crate::stream::{RecvStream, SendStream};
 use crate::util::TOKIO_EXECUTOR;
 
 /// Configuration options for the MagicEndpoint.
@@ -25,9 +26,6 @@ pub enum DerpMode {
     Disabled,
     /// Default derp map is used.
     Default,
-    /// Default derp map, but only used for stun.
-    /// Not yet implemented
-    StunOnly,
 }
 
 impl From<DerpMode> for iroh_net::derp::DerpMode {
@@ -35,7 +33,6 @@ impl From<DerpMode> for iroh_net::derp::DerpMode {
         match value {
             DerpMode::Disabled => iroh_net::derp::DerpMode::Disabled,
             DerpMode::Default => iroh_net::derp::DerpMode::Default,
-            DerpMode::StunOnly => unimplemented!("stun only is not implemented yet"),
         }
     }
 }
@@ -126,6 +123,11 @@ pub enum MagicEndpointResult {
     ReadError,
 }
 
+/// Attempts to bind the endpoint to the given port.
+///
+/// If the port is already in use, a random port will be used.
+///
+/// Blocks the current thread.
 #[ffi_export]
 pub fn magic_endpoint_bind(
     config: &MagicEndpointConfig,
@@ -155,111 +157,9 @@ pub fn magic_endpoint_bind(
     })
 }
 
-#[derive_ReprC]
-#[repr(opaque)]
-#[derive(Debug, Default)]
-pub struct RecvStream {
-    stream: Option<quinn::RecvStream>,
-}
-
-/// Must be freed using `magic_endpoint_recv_stream_free`
-#[ffi_export]
-pub fn magic_endpoint_recv_stream_default() -> repr_c::Box<RecvStream> {
-    Box::<RecvStream>::default().into()
-}
-
-/// Free the recv stream.
-#[ffi_export]
-pub fn magic_endpoint_recv_stream_free(stream: repr_c::Box<RecvStream>) {
-    drop(stream);
-}
-
-/// Recv data on the stream.
+/// Accept a new connection and a uni directional stream on this endpoint.
 ///
-/// Returns how many bytes were read. Returns `-1` if an error occured.
-#[ffi_export]
-pub fn magic_endpoint_recv_stream_read(
-    stream: &mut repr_c::Box<RecvStream>,
-    mut data: slice::slice_mut<'_, u8>,
-) -> i64 {
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        stream
-            .stream
-            .as_mut()
-            .expect("sendstream not initialized")
-            .read(&mut data)
-            .await
-    });
-
-    match res {
-        Ok(read) => read.unwrap_or(0) as i64,
-        Err(_err) => -1,
-    }
-}
-
-#[derive_ReprC]
-#[repr(opaque)]
-#[derive(Debug, Default)]
-pub struct SendStream {
-    stream: Option<quinn::SendStream>,
-}
-
-/// Must be freed using `magic_endpoint_send_stream_free`
-#[ffi_export]
-pub fn magic_endpoint_send_stream_default() -> repr_c::Box<SendStream> {
-    Box::<SendStream>::default().into()
-}
-
-/// Free the send stream.
-#[ffi_export]
-pub fn magic_endpoint_send_stream_free(stream: repr_c::Box<SendStream>) {
-    drop(stream);
-}
-
-/// Send data on the stream
-#[ffi_export]
-pub fn magic_endpoint_send_stream_write(
-    stream: &mut repr_c::Box<SendStream>,
-    data: slice::slice_ref<'_, u8>,
-) -> MagicEndpointResult {
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        stream
-            .stream
-            .as_mut()
-            .expect("sendstream not initialized")
-            .write_all(&data)
-            .await
-    });
-
-    match res {
-        Ok(()) => MagicEndpointResult::Ok,
-        Err(_err) => MagicEndpointResult::SendError,
-    }
-}
-
-/// Finish the sending on this stream.
-///
-/// Consumes the send stream, no need to free it afterwards.
-#[ffi_export]
-pub fn magic_endpoint_send_stream_finish(
-    mut stream: repr_c::Box<SendStream>,
-) -> MagicEndpointResult {
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        stream
-            .stream
-            .as_mut()
-            .expect("sendstream not initialized")
-            .finish()
-            .await
-    });
-
-    match res {
-        Ok(()) => MagicEndpointResult::Ok,
-        Err(_err) => MagicEndpointResult::SendError,
-    }
-}
-
-/// Accept a new connection and uni directinal stream on this endpoint.
+/// Blocks the current thread.
 #[ffi_export]
 pub fn magic_endpoint_accept_uni(
     ep: &repr_c::Box<MagicEndpoint>,
@@ -294,6 +194,7 @@ pub fn magic_endpoint_accept_uni(
     }
 }
 
+/// An established connection.
 #[derive_ReprC]
 #[repr(opaque)]
 #[derive(Debug, Default)]
@@ -301,18 +202,20 @@ pub struct Connection {
     connection: Option<quinn::Connection>,
 }
 
-/// Result must be freed using `magic_endpoint_connection_free`.
+/// Result must be freed using `connection_free`.
 #[ffi_export]
-pub fn magic_endpoint_connection_default() -> repr_c::Box<Connection> {
+pub fn connection_default() -> repr_c::Box<Connection> {
     Box::<Connection>::default().into()
 }
 
+/// Frees the connection.
 #[ffi_export]
-pub fn magic_endpoint_connection_free(conn: repr_c::Box<Connection>) {
+pub fn connection_free(conn: repr_c::Box<Connection>) {
     drop(conn);
 }
 
-/// Send an unreliabla datgram.
+/// Send a single datgram (unreliably).
+///
 /// Data must not be larger than the available `max_datagram` size.
 #[ffi_export]
 pub fn magic_endpoint_connection_write_datagram(
@@ -336,9 +239,11 @@ pub fn magic_endpoint_connection_write_datagram(
     }
 }
 
-/// Read an unreliabla datgram.
+/// Reads a datgram.
 ///
 /// Data must not be larger than the available `max_datagram` size.
+///
+/// Blocks the current thread until a datagram is received.
 #[ffi_export]
 pub fn magic_endpoint_connection_read_datagram(
     connection: &repr_c::Box<Connection>,
@@ -380,6 +285,8 @@ pub fn magic_endpoint_connection_max_datagram_size(connection: &repr_c::Box<Conn
 }
 
 /// Accept a new connection on this endpoint.
+///
+/// Blocks the current thread until a connection is established.
 #[ffi_export]
 pub fn magic_endpoint_accept(
     ep: &repr_c::Box<MagicEndpoint>,
@@ -412,6 +319,9 @@ pub fn magic_endpoint_accept(
     }
 }
 
+/// Connect the given node and establish a uni directional connection.
+///
+/// Blocks the current thread until the connection is established.
 #[ffi_export]
 pub fn magic_endpoint_connect_uni(
     ep: &repr_c::Box<MagicEndpoint>,
@@ -441,6 +351,9 @@ pub fn magic_endpoint_connect_uni(
     }
 }
 
+/// Connects to the given node.
+///
+/// Blocks until the connection is established.
 #[ffi_export]
 pub fn magic_endpoint_connect(
     ep: &repr_c::Box<MagicEndpoint>,
@@ -469,6 +382,7 @@ pub fn magic_endpoint_connect(
     }
 }
 
+/// Get the the node dialing information of this magic endpoint.
 #[ffi_export]
 pub fn magic_endpoint_my_addr(
     ep: &repr_c::Box<MagicEndpoint>,
@@ -495,7 +409,14 @@ pub fn magic_endpoint_my_addr(
 
 #[cfg(test)]
 mod tests {
-    use crate::{addr::node_addr_default, util::rust_buffer_alloc};
+    use crate::{
+        addr::node_addr_default,
+        stream::{
+            recv_stream_default, recv_stream_read, send_stream_default, send_stream_finish,
+            send_stream_write,
+        },
+        util::rust_buffer_alloc,
+    };
 
     use super::*;
 
@@ -527,15 +448,14 @@ mod tests {
 
             // accept connection
             println!("[s] accepting conn");
-            let mut recv_stream = magic_endpoint_recv_stream_default();
+            let mut recv_stream = recv_stream_default();
             let accept_res = magic_endpoint_accept_uni(&ep, alpn_s.as_ref(), &mut recv_stream);
             assert_eq!(accept_res, MagicEndpointResult::Ok);
 
             println!("[s] reading");
 
             let mut recv_buffer = vec![0u8; 1024];
-            let read_res =
-                magic_endpoint_recv_stream_read(&mut recv_stream, (&mut recv_buffer[..]).into());
+            let read_res = recv_stream_read(&mut recv_stream, (&mut recv_buffer[..]).into());
             assert!(read_res > 0);
             assert_eq!(
                 std::str::from_utf8(&recv_buffer[..read_res as usize]).unwrap(),
@@ -555,17 +475,16 @@ mod tests {
 
             println!("[c] dialing");
             // connect to server
-            let mut send_stream = magic_endpoint_send_stream_default();
+            let mut send_stream = send_stream_default();
             let connect_res =
                 magic_endpoint_connect_uni(&ep, alpn.as_ref(), node_addr, &mut send_stream);
             assert_eq!(connect_res, MagicEndpointResult::Ok);
 
             println!("[c] sending");
-            let send_res =
-                magic_endpoint_send_stream_write(&mut send_stream, b"hello world"[..].into());
+            let send_res = send_stream_write(&mut send_stream, b"hello world"[..].into());
             assert_eq!(send_res, MagicEndpointResult::Ok);
 
-            let finish_res = magic_endpoint_send_stream_finish(send_stream);
+            let finish_res = send_stream_finish(send_stream);
             assert_eq!(finish_res, MagicEndpointResult::Ok);
         });
 
@@ -602,7 +521,7 @@ mod tests {
 
             // accept connection
             println!("[s] accepting conn");
-            let mut conn = magic_endpoint_connection_default();
+            let mut conn = connection_default();
             let accept_res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
             assert_eq!(accept_res, MagicEndpointResult::Ok);
 
@@ -627,7 +546,7 @@ mod tests {
 
             println!("[c] dialing");
             // connect to server
-            let mut conn = magic_endpoint_connection_default();
+            let mut conn = connection_default();
             let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
             assert_eq!(connect_res, MagicEndpointResult::Ok);
 

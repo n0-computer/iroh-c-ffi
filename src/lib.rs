@@ -1,6 +1,7 @@
 pub mod addr;
 pub mod key;
 pub mod magic_endpoint;
+pub mod stream;
 pub mod util;
 
 /// The following function is only necessary for the header generation.

@@ -14,6 +14,24 @@ extern "C" {
 #endif
 
 /** \brief
+ *  An established connection.
+ */
+typedef struct Connection Connection_t;
+
+/** \brief
+ *  Result must be freed using `connection_free`.
+ */
+Connection_t *
+connection_default (void);
+
+/** \brief
+ *  Frees the connection.
+ */
+void
+connection_free (
+    Connection_t * conn);
+
+/** \brief
  *  An endpoint that leverages a quic endpoint, backed by a magic socket.
  */
 typedef struct MagicEndpoint MagicEndpoint_t;
@@ -52,9 +70,6 @@ typedef struct slice_ref_uint8 {
      */
     size_t len;
 } slice_ref_uint8_t;
-
-/** <No documentation available> */
-typedef struct Connection Connection_t;
 
 /** \brief
  *  Result of dealing with a magic endpoint.
@@ -100,6 +115,8 @@ MagicEndpointResult_t;
 
 /** \brief
  *  Accept a new connection on this endpoint.
+ *
+ *  Blocks the current thread until a connection is established.
  */
 MagicEndpointResult_t
 magic_endpoint_accept (
@@ -107,11 +124,15 @@ magic_endpoint_accept (
     slice_ref_uint8_t expected_alpn,
     Connection_t * * out);
 
-/** <No documentation available> */
+/** \brief
+ *  A stream that can only be used to receive data.
+ */
 typedef struct RecvStream RecvStream_t;
 
 /** \brief
- *  Accept a new connection and uni directinal stream on this endpoint.
+ *  Accept a new connection and a uni directional stream on this endpoint.
+ *
+ *  Blocks the current thread.
  */
 MagicEndpointResult_t
 magic_endpoint_accept_uni (
@@ -135,11 +156,6 @@ enum DerpMode {
      *  Default derp map is used.
      */
     DERP_MODE_DEFAULT,
-    /** \brief
-     *  Default derp map, but only used for stun.
-     *  Not yet implemented
-     */
-    DERP_MODE_STUN_ONLY,
 }
 #ifndef DOXYGEN
 ; typedef uint8_t
@@ -193,7 +209,13 @@ typedef struct MagicEndpointConfig {
     SecretKey_t * secret_key;
 } MagicEndpointConfig_t;
 
-/** <No documentation available> */
+/** \brief
+ *  Attempts to bind the endpoint to the given port.
+ *
+ *  If the port is already in use, a random port will be used.
+ *
+ *  Blocks the current thread.
+ */
 MagicEndpointResult_t
 magic_endpoint_bind (
     MagicEndpointConfig_t const * config,
@@ -279,7 +301,11 @@ typedef struct NodeAddr {
     Vec_SocketAddr_ptr_t direct_addresses;
 } NodeAddr_t;
 
-/** <No documentation available> */
+/** \brief
+ *  Connects to the given node.
+ *
+ *  Blocks until the connection is established.
+ */
 MagicEndpointResult_t
 magic_endpoint_connect (
     MagicEndpoint_t * const * ep,
@@ -287,27 +313,22 @@ magic_endpoint_connect (
     NodeAddr_t node_addr,
     Connection_t * * out);
 
-/** <No documentation available> */
+/** \brief
+ *  A stream that can only be used to send data
+ */
 typedef struct SendStream SendStream_t;
 
-/** <No documentation available> */
+/** \brief
+ *  Connect the given node and establish a uni directional connection.
+ *
+ *  Blocks the current thread until the connection is established.
+ */
 MagicEndpointResult_t
 magic_endpoint_connect_uni (
     MagicEndpoint_t * const * ep,
     slice_ref_uint8_t alpn,
     NodeAddr_t node_addr,
     SendStream_t * * out);
-
-/** \brief
- *  Result must be freed using `magic_endpoint_connection_free`.
- */
-Connection_t *
-magic_endpoint_connection_default (void);
-
-/** <No documentation available> */
-void
-magic_endpoint_connection_free (
-    Connection_t * conn);
 
 /** \brief
  *  Returns the maximum datagram size. `0` if it is not supported.
@@ -317,9 +338,11 @@ magic_endpoint_connection_max_datagram_size (
     Connection_t * const * connection);
 
 /** \brief
- *  Read an unreliabla datgram.
+ *  Reads a datgram.
  *
  *  Data must not be larger than the available `max_datagram` size.
+ *
+ *  Blocks the current thread until a datagram is received.
  */
 MagicEndpointResult_t
 magic_endpoint_connection_read_datagram (
@@ -327,7 +350,8 @@ magic_endpoint_connection_read_datagram (
     Vec_uint8_t * data);
 
 /** \brief
- *  Send an unreliabla datgram.
+ *  Send a single datgram (unreliably).
+ *
  *  Data must not be larger than the available `max_datagram` size.
  */
 MagicEndpointResult_t
@@ -350,7 +374,9 @@ void
 magic_endpoint_free (
     MagicEndpoint_t * ep);
 
-/** <No documentation available> */
+/** \brief
+ *  Get the the node dialing information of this magic endpoint.
+ */
 MagicEndpointResult_t
 magic_endpoint_my_addr (
     MagicEndpoint_t * const * ep,
@@ -365,90 +391,6 @@ magic_endpoint_my_addr (
 void
 magic_endpoint_network_change (
     MagicEndpoint_t * const * ep);
-
-/** \brief
- *  Must be freed using `magic_endpoint_recv_stream_free`
- */
-RecvStream_t *
-magic_endpoint_recv_stream_default (void);
-
-/** \brief
- *  Free the recv stream.
- */
-void
-magic_endpoint_recv_stream_free (
-    RecvStream_t * stream);
-
-/** \brief
- *  `&'lt mut [T]` but with a guaranteed `#[repr(C)]` layout.
- *
- *  # C layout (for some given type T)
- *
- *  ```c
- *  typedef struct {
- *  // Cannot be NULL
- *  T * ptr;
- *  size_t len;
- *  } slice_T;
- *  ```
- *
- *  # Nullable pointer?
- *
- *  If you want to support the above typedef, but where the `ptr` field is
- *  allowed to be `NULL` (with the contents of `len` then being undefined)
- *  use the `Option< slice_ptr<_> >` type.
- */
-typedef struct slice_mut_uint8 {
-    /** \brief
-     *  Pointer to the first element (if any).
-     */
-    uint8_t * ptr;
-
-    /** \brief
-     *  Element count
-     */
-    size_t len;
-} slice_mut_uint8_t;
-
-/** \brief
- *  Recv data on the stream.
- *
- *  Returns how many bytes were read. Returns `-1` if an error occured.
- */
-int64_t
-magic_endpoint_recv_stream_read (
-    RecvStream_t * * stream,
-    slice_mut_uint8_t data);
-
-/** \brief
- *  Must be freed using `magic_endpoint_send_stream_free`
- */
-SendStream_t *
-magic_endpoint_send_stream_default (void);
-
-/** \brief
- *  Finish the sending on this stream.
- *
- *  Consumes the send stream, no need to free it afterwards.
- */
-MagicEndpointResult_t
-magic_endpoint_send_stream_finish (
-    SendStream_t * stream);
-
-/** \brief
- *  Free the send stream.
- */
-void
-magic_endpoint_send_stream_free (
-    SendStream_t * stream);
-
-/** \brief
- *  Send data on the stream
- */
-MagicEndpointResult_t
-magic_endpoint_send_stream_write (
-    SendStream_t * * stream,
-    slice_ref_uint8_t data);
 
 /** \brief
  *  Add a derp url to the peer's addr info.
@@ -566,6 +508,64 @@ public_key_from_base32 (
     PublicKey_t * out);
 
 /** \brief
+ *  Must be freed using `recv_stream_free`.
+ */
+RecvStream_t *
+recv_stream_default (void);
+
+/** \brief
+ *  Free the recv stream.
+ *
+ *  Implicitly calls `stop(0)` on the connection.
+ */
+void
+recv_stream_free (
+    RecvStream_t * stream);
+
+/** \brief
+ *  `&'lt mut [T]` but with a guaranteed `#[repr(C)]` layout.
+ *
+ *  # C layout (for some given type T)
+ *
+ *  ```c
+ *  typedef struct {
+ *  // Cannot be NULL
+ *  T * ptr;
+ *  size_t len;
+ *  } slice_T;
+ *  ```
+ *
+ *  # Nullable pointer?
+ *
+ *  If you want to support the above typedef, but where the `ptr` field is
+ *  allowed to be `NULL` (with the contents of `len` then being undefined)
+ *  use the `Option< slice_ptr<_> >` type.
+ */
+typedef struct slice_mut_uint8 {
+    /** \brief
+     *  Pointer to the first element (if any).
+     */
+    uint8_t * ptr;
+
+    /** \brief
+     *  Element count
+     */
+    size_t len;
+} slice_mut_uint8_t;
+
+/** \brief
+ *  Receive data on this stream.
+ *
+ *  Blocks the current thread.
+ *
+ *  Returns how many bytes were read. Returns `-1` if an error occured.
+ */
+int64_t
+recv_stream_read (
+    RecvStream_t * * stream,
+    slice_mut_uint8_t data);
+
+/** \brief
  *  Allocates a buffer managed by rust, given the initial size.
  */
 Vec_uint8_t
@@ -641,6 +641,40 @@ secret_key_generate (void);
 PublicKey_t
 secret_key_public (
     SecretKey_t const * key);
+
+/** \brief
+ *  Must be freed using `send_stream_free`.
+ */
+SendStream_t *
+send_stream_default (void);
+
+/** \brief
+ *  Finish the sending on this stream.
+ *
+ *  Consumes the send stream, no need to free it afterwards.
+ *
+ *  Blocks the current thread.
+ */
+MagicEndpointResult_t
+send_stream_finish (
+    SendStream_t * stream);
+
+/** \brief
+ *  Frees the send stream.
+ */
+void
+send_stream_free (
+    SendStream_t * stream);
+
+/** \brief
+ *  Send data on the stream.
+ *
+ *  Blocks the current thread.
+ */
+MagicEndpointResult_t
+send_stream_write (
+    SendStream_t * * stream,
+    slice_ref_uint8_t data);
 
 /** \brief
  *  Formats the given socket addr as a string
