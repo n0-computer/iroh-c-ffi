@@ -68,6 +68,10 @@ enum MagicEndpointResult {
      *  Error while reading data.
      */
     MAGIC_ENDPOINT_RESULT_READ_ERROR,
+    /** \brief
+     *  Timeout elapsed.
+     */
+    MAGIC_ENDPOINT_RESULT_TIMEOUT,
 }
 #ifndef DOXYGEN
 ; typedef uint8_t
@@ -107,6 +111,13 @@ connection_default (void);
 void
 connection_free (
     Connection_t * conn);
+
+/** \brief
+ *  Returns the maximum datagram size. `0` if it is not supported.
+ */
+size_t
+connection_max_datagram_size (
+    Connection_t * const * connection);
 
 /** \brief
  *  Establish a bi directional connection.
@@ -154,6 +165,21 @@ MagicEndpointResult_t
 connection_read_datagram (
     Connection_t * const * connection,
     Vec_uint8_t * data);
+
+/** \brief
+ *  Reads a datgram, with timeout.
+ *
+ *  Will block at most `timeout` milliseconds.
+ *
+ *  Data received will not be larger than the available `max_datagram` size.
+ *
+ *  Blocks the current thread until a datagram is received or the timeout is expired.
+ */
+MagicEndpointResult_t
+connection_read_datagram_timeout (
+    Connection_t * const * connection,
+    Vec_uint8_t * data,
+    uint64_t timeout_ms);
 
 /** \brief
  *  Estimated roundtrip time for the current connection in milli seconds.
@@ -377,13 +403,6 @@ magic_endpoint_connect (
     slice_ref_uint8_t alpn,
     NodeAddr_t node_addr,
     Connection_t * * out);
-
-/** \brief
- *  Returns the maximum datagram size. `0` if it is not supported.
- */
-size_t
-magic_endpoint_connection_max_datagram_size (
-    Connection_t * const * connection);
 
 /** \brief
  *  Generate a default endpoint.

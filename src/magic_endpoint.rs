@@ -1,4 +1,5 @@
 use std::ops::Deref;
+use std::time::Duration;
 
 use anyhow::Context;
 use safer_ffi::{prelude::*, slice, vec};
@@ -121,6 +122,8 @@ pub enum MagicEndpointResult {
     SendError,
     /// Error while reading data.
     ReadError,
+    /// Timeout elapsed.
+    Timeout,
 }
 
 /// Attempts to bind the endpoint to the given port.
@@ -300,9 +303,48 @@ pub fn connection_read_datagram(
     }
 }
 
+/// Reads a datgram, with timeout.
+///
+/// Will block at most `timeout` milliseconds.
+///
+/// Data received will not be larger than the available `max_datagram` size.
+///
+/// Blocks the current thread until a datagram is received or the timeout is expired.
+#[ffi_export]
+pub fn connection_read_datagram_timeout(
+    connection: &repr_c::Box<Connection>,
+    data: &mut vec::Vec<u8>,
+    timeout_ms: u64,
+) -> MagicEndpointResult {
+    let timeout = Duration::from_millis(timeout_ms);
+    let res = TOKIO_EXECUTOR.block_on(async move {
+        tokio::time::timeout(timeout, async move {
+            connection
+                .connection
+                .as_ref()
+                .expect("connection not initialized")
+                .read_datagram()
+                .await
+        })
+        .await
+    });
+
+    match res {
+        Ok(Ok(bytes)) => {
+            data.with_rust_mut(|v| {
+                v.resize(bytes.len(), 0u8);
+                v.copy_from_slice(&bytes);
+            });
+            MagicEndpointResult::Ok
+        }
+        Ok(Err(_err)) => MagicEndpointResult::ReadError,
+        Err(_err) => MagicEndpointResult::Timeout,
+    }
+}
+
 /// Returns the maximum datagram size. `0` if it is not supported.
 #[ffi_export]
-pub fn magic_endpoint_connection_max_datagram_size(connection: &repr_c::Box<Connection>) -> usize {
+pub fn connection_max_datagram_size(connection: &repr_c::Box<Connection>) -> usize {
     connection
         .connection
         .as_ref()
@@ -611,7 +653,7 @@ mod tests {
             assert_eq!(connect_res, MagicEndpointResult::Ok);
 
             println!("[c] sending");
-            let max_datagram = magic_endpoint_connection_max_datagram_size(&conn);
+            let max_datagram = connection_max_datagram_size(&conn);
             assert!(max_datagram > 0);
             dbg!(max_datagram);
             let send_res = connection_write_datagram(&mut conn, b"hello world"[..].into());
