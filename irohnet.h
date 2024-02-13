@@ -618,6 +618,21 @@ recv_stream_read (
     slice_mut_uint8_t data);
 
 /** \brief
+ *  Receive data on this stream.
+ *
+ *  Size limit specifies how much data at most is read.
+ *
+ *  Blocks the current thread, until either the full stream has been read, or
+ *  the timeout has expired.
+ */
+MagicEndpointResult_t
+recv_stream_read_to_end_timeout (
+    RecvStream_t * * stream,
+    Vec_uint8_t * data,
+    size_t size_limit,
+    uint64_t timeout_ms);
+
+/** \brief
  *  Allocates a buffer managed by rust, given the initial size.
  */
 Vec_uint8_t

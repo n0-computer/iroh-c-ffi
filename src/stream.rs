@@ -1,4 +1,6 @@
-use safer_ffi::{prelude::*, slice};
+use std::time::Duration;
+
+use safer_ffi::{prelude::*, slice, vec};
 
 use crate::magic_endpoint::MagicEndpointResult;
 use crate::util::TOKIO_EXECUTOR;
@@ -58,6 +60,44 @@ pub fn recv_stream_read(
     match res {
         Ok(read) => read.unwrap_or(0) as i64,
         Err(_err) => -1,
+    }
+}
+
+/// Receive data on this stream.
+///
+/// Size limit specifies how much data at most is read.
+///
+/// Blocks the current thread, until either the full stream has been read, or
+/// the timeout has expired.
+#[ffi_export]
+pub fn recv_stream_read_to_end_timeout(
+    stream: &mut repr_c::Box<RecvStream>,
+    data: &mut vec::Vec<u8>,
+    size_limit: usize,
+    timeout_ms: u64,
+) -> MagicEndpointResult {
+    let timeout = Duration::from_millis(timeout_ms);
+    let res = TOKIO_EXECUTOR.block_on(async move {
+        tokio::time::timeout(timeout, async move {
+            stream
+                .stream
+                .as_mut()
+                .expect("sendstream not initialized")
+                .read_to_end(size_limit)
+                .await
+        })
+        .await
+    });
+
+    match res {
+        Ok(Ok(read)) => {
+            data.with_rust_mut(|v| {
+                *v = read;
+            });
+            MagicEndpointResult::Ok
+        }
+        Ok(Err(_err)) => MagicEndpointResult::ReadError,
+        Err(_err) => MagicEndpointResult::Timeout,
     }
 }
 
