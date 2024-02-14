@@ -1,3 +1,4 @@
+use iroh_net::ticket::NodeTicket;
 use safer_ffi::{prelude::*, vec};
 
 use crate::key::PublicKey;
@@ -13,6 +14,14 @@ pub struct NodeAddr {
     pub derp_url: Option<repr_c::Box<Url>>,
     /// Socket addresses where the peer might be reached directly.
     pub direct_addresses: vec::Vec<repr_c::Box<SocketAddr>>,
+}
+
+impl PartialEq for NodeAddr {
+    fn eq(&self, other: &Self) -> bool {
+        let a: iroh_net::NodeAddr = self.clone().into();
+        let b: iroh_net::NodeAddr = other.clone().into();
+        a.eq(&b)
+    }
 }
 
 impl From<NodeAddr> for iroh_net::magic_endpoint::NodeAddr {
@@ -74,6 +83,32 @@ pub fn node_addr_default() -> NodeAddr {
     }
 }
 
+/// Parses the full node addr string representation.
+#[ffi_export]
+pub fn node_addr_from_string(input: char_p::Ref<'_>, out: &mut NodeAddr) -> AddrResult {
+    let ticket: Result<NodeTicket, _> = input.to_str().parse();
+    match ticket {
+        Ok(ticket) => {
+            *out = ticket.node_addr().clone().into();
+            AddrResult::Ok
+        }
+        Err(_err) => AddrResult::InvalidNodeAddr,
+    }
+}
+
+/// Formats the given node addr as a string.
+///
+/// Result must be freed with `rust_free_string`
+#[ffi_export]
+pub fn node_addr_as_str(addr: &NodeAddr) -> char_p::Box {
+    let addr: iroh_net::NodeAddr = addr.clone().into();
+    NodeTicket::new(addr)
+        .unwrap()
+        .to_string()
+        .try_into()
+        .unwrap()
+}
+
 /// Free the node addr.
 #[ffi_export]
 pub fn node_addr_free(node_addr: NodeAddr) {
@@ -115,6 +150,13 @@ pub fn node_addr_derp_url(addr: &NodeAddr) -> Option<&repr_c::Box<Url>> {
 pub struct SocketAddr {
     addr: std::net::SocketAddr,
 }
+
+impl From<std::net::SocketAddr> for SocketAddr {
+    fn from(addr: std::net::SocketAddr) -> Self {
+        SocketAddr { addr }
+    }
+}
+
 /// Formats the given socket addr as a string
 ///
 /// Result must be freed with `rust_free_string`
@@ -162,6 +204,12 @@ pub struct Url {
     url: Option<url::Url>,
 }
 
+impl From<url::Url> for Url {
+    fn from(url: url::Url) -> Self {
+        Url { url: Some(url) }
+    }
+}
+
 /// Creates an initialized but invalid Url.
 #[ffi_export]
 pub fn url_default() -> repr_c::Box<Url> {
@@ -191,6 +239,8 @@ pub enum AddrResult {
     InvalidUrl,
     /// SocketAddr was invalid.
     InvalidSocketAddr,
+    /// The node addr was invalid.
+    InvalidNodeAddr,
 }
 
 /// Try to parse a url from a string.
@@ -202,5 +252,40 @@ pub fn url_from_string(input: char_p::Ref<'_>, out: &mut repr_c::Box<Url>) -> Ad
             AddrResult::Ok
         }
         Err(_err) => AddrResult::InvalidUrl,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::key::public_key_default;
+
+    use super::*;
+
+    #[test]
+    fn test_roundrip_string_node_addr() {
+        let mut node_addr = node_addr_default();
+        node_addr.node_id = public_key_default();
+        node_addr_add_derp_url(
+            &mut node_addr,
+            Box::new(Url::from("http://test.com".parse::<url::Url>().unwrap()))
+                .try_into()
+                .unwrap(),
+        );
+        node_addr_add_direct_address(
+            &mut node_addr,
+            Box::new(SocketAddr::from(
+                "127.0.0.1:1234".parse::<std::net::SocketAddr>().unwrap(),
+            ))
+            .try_into()
+            .unwrap(),
+        );
+
+        dbg!(&node_addr);
+        let string = node_addr_as_str(&node_addr);
+
+        let mut back = node_addr_default();
+        let res = node_addr_from_string(string.as_ref(), &mut back);
+        assert_eq!(res, AddrResult::Ok);
+        assert_eq!(back, node_addr);
     }
 }

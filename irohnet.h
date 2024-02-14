@@ -454,6 +454,15 @@ node_addr_add_direct_address (
     SocketAddr_t * address);
 
 /** \brief
+ *  Formats the given node addr as a string.
+ *
+ *  Result must be freed with `rust_free_string`
+ */
+char *
+node_addr_as_str (
+    NodeAddr_t const * addr);
+
+/** \brief
  *  Create a an empty (invalid) addr with no details.
  *
  *  Must be freed using `node_addr_free`.
@@ -484,6 +493,42 @@ node_addr_direct_addresses_nth (
 void
 node_addr_free (
     NodeAddr_t node_addr);
+
+/** <No documentation available> */
+/** \remark Has the same ABI as `uint8_t` **/
+#ifdef DOXYGEN
+typedef
+#endif
+enum AddrResult {
+    /** \brief
+     *  Everything is ok.
+     */
+    ADDR_RESULT_OK = 0,
+    /** \brief
+     *  Url was invalid.
+     */
+    ADDR_RESULT_INVALID_URL,
+    /** \brief
+     *  SocketAddr was invalid.
+     */
+    ADDR_RESULT_INVALID_SOCKET_ADDR,
+    /** \brief
+     *  The node addr was invalid.
+     */
+    ADDR_RESULT_INVALID_NODE_ADDR,
+}
+#ifndef DOXYGEN
+; typedef uint8_t
+#endif
+AddrResult_t;
+
+/** \brief
+ *  Parses the full node addr string representation.
+ */
+AddrResult_t
+node_addr_from_string (
+    char const * input,
+    NodeAddr_t * out);
 
 /** \brief
  *  Create a new addr with no details.
@@ -767,30 +812,6 @@ socket_addr_default (void);
 void
 socket_addr_free (
     SocketAddr_t * addr);
-
-/** <No documentation available> */
-/** \remark Has the same ABI as `uint8_t` **/
-#ifdef DOXYGEN
-typedef
-#endif
-enum AddrResult {
-    /** \brief
-     *  Everything is ok.
-     */
-    ADDR_RESULT_OK = 0,
-    /** \brief
-     *  Url was invalid.
-     */
-    ADDR_RESULT_INVALID_URL,
-    /** \brief
-     *  SocketAddr was invalid.
-     */
-    ADDR_RESULT_INVALID_SOCKET_ADDR,
-}
-#ifndef DOXYGEN
-; typedef uint8_t
-#endif
-AddrResult_t;
 
 /** \brief
  *  Try to parse a url from a string.
