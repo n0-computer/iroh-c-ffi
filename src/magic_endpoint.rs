@@ -388,6 +388,44 @@ pub fn magic_endpoint_accept(
     }
 }
 
+/// Accept a new connection on this endpoint.
+///
+/// Does not prespecify the ALPN, and but rather returns it.
+///
+/// Blocks the current thread until a connection is established.
+#[ffi_export]
+pub fn magic_endpoint_accept_any(
+    ep: &repr_c::Box<MagicEndpoint>,
+    alpn_out: &mut vec::Vec<u8>,
+    out: &mut repr_c::Box<Connection>,
+) -> MagicEndpointResult {
+    let res = TOKIO_EXECUTOR.block_on(async move {
+        let conn = ep
+            .ep
+            .as_ref()
+            .expect("endpoint not initalized")
+            .accept()
+            .await
+            .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
+        let (remote_node_id, alpn, connection) = iroh_net::magic_endpoint::accept_conn(conn)
+            .await
+            .context("accept_conn")?;
+
+        alpn_out.with_rust_mut(|v| {
+            *v = alpn.as_bytes().to_vec();
+        });
+        anyhow::Ok((remote_node_id, connection))
+    });
+
+    match res {
+        Ok((_remote_node_id, connection)) => {
+            out.connection.replace(connection);
+            MagicEndpointResult::Ok
+        }
+        Err(_err) => MagicEndpointResult::AcceptUniFailed,
+    }
+}
+
 /// Establish a uni directional connection.
 ///
 /// Blocks the current thread until the connection is established.

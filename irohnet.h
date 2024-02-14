@@ -246,6 +246,19 @@ magic_endpoint_accept (
     Connection_t * * out);
 
 /** \brief
+ *  Accept a new connection on this endpoint.
+ *
+ *  Does not prespecify the ALPN, and but rather returns it.
+ *
+ *  Blocks the current thread until a connection is established.
+ */
+MagicEndpointResult_t
+magic_endpoint_accept_any (
+    MagicEndpoint_t * const * ep,
+    Vec_uint8_t * alpn_out,
+    Connection_t * * out);
+
+/** \brief
  *  The options to configure derp.
  */
 /** \remark Has the same ABI as `uint8_t` **/
