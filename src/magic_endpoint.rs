@@ -1,3 +1,4 @@
+use std::ffi::c_void;
 use std::ops::Deref;
 use std::time::Duration;
 
@@ -113,7 +114,11 @@ pub enum MagicEndpointResult {
     /// Failed to bind.
     BindError,
     /// Failed to accept a uni directional stream,
+    AcceptFailed,
+    /// Failed to accept a uni directional stream,
     AcceptUniFailed,
+    /// Failed to accept a bi directional stream,
+    AcceptBiFailed,
     /// Failed to connect and establish a uni directional stream.
     ConnectUniError,
     /// Unable to retrive node addr.
@@ -216,7 +221,7 @@ pub fn connection_accept_bi(
             recv.stream.replace(recv_stream);
             MagicEndpointResult::Ok
         }
-        Err(_err) => MagicEndpointResult::AcceptUniFailed,
+        Err(_err) => MagicEndpointResult::AcceptBiFailed,
     }
 }
 
@@ -422,8 +427,75 @@ pub fn magic_endpoint_accept_any(
             out.connection.replace(connection);
             MagicEndpointResult::Ok
         }
-        Err(_err) => MagicEndpointResult::AcceptUniFailed,
+        Err(_err) => MagicEndpointResult::AcceptFailed,
     }
+}
+
+/// Accept a new connection on this endpoint.
+///
+/// Does not prespecify the ALPN, and but rather returns it.
+///
+/// Does not block, the provided callback will be called the next time a new connection is accepted or
+/// when an error occurs.
+/// `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
+/// called from another thread.
+#[ffi_export]
+pub fn magic_endpoint_accept_any_cb(
+    ep: repr_c::Box<MagicEndpoint>,
+    ctx: *const c_void,
+    cb: unsafe extern "C" fn(
+        ctx: *const c_void,
+        err: MagicEndpointResult,
+        alpn: vec::Vec<u8>,
+        conn: repr_c::Box<Connection>,
+    ),
+) {
+    // hack around the fact that `*const c_void` is not Send
+    struct CtxPtr(*const c_void);
+    unsafe impl Send for CtxPtr {}
+    let ctx_ptr = CtxPtr(ctx);
+
+    TOKIO_EXECUTOR.spawn(async move {
+        // make the compiler happy
+        let _ = &ctx_ptr;
+        async fn connect(
+            ep: repr_c::Box<MagicEndpoint>,
+        ) -> anyhow::Result<(String, quinn::Connection)> {
+            let conn = ep
+                .ep
+                .as_ref()
+                .expect("endpoint not initalized")
+                .accept()
+                .await
+                .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
+            let (_remote_node_id, alpn, connection) = iroh_net::magic_endpoint::accept_conn(conn)
+                .await
+                .context("accept_conn")?;
+
+            Ok((alpn, connection))
+        }
+
+        match connect(ep).await {
+            Ok((alpn, connection)) => {
+                let alpn = alpn.as_bytes().to_vec().into();
+                let conn = Box::new(Connection {
+                    connection: Some(connection),
+                })
+                .into();
+                unsafe {
+                    cb(ctx_ptr.0, MagicEndpointResult::Ok, alpn, conn);
+                }
+            }
+            Err(_err) => unsafe {
+                cb(
+                    ctx_ptr.0,
+                    MagicEndpointResult::AcceptFailed,
+                    vec::Vec::EMPTY,
+                    Box::<Connection>::default().into(),
+                );
+            },
+        }
+    });
 }
 
 /// Establish a uni directional connection.

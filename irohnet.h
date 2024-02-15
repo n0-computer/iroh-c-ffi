@@ -51,7 +51,15 @@ enum MagicEndpointResult {
     /** \brief
      *  Failed to accept a uni directional stream,
      */
+    MAGIC_ENDPOINT_RESULT_ACCEPT_FAILED,
+    /** \brief
+     *  Failed to accept a uni directional stream,
+     */
     MAGIC_ENDPOINT_RESULT_ACCEPT_UNI_FAILED,
+    /** \brief
+     *  Failed to accept a bi directional stream,
+     */
+    MAGIC_ENDPOINT_RESULT_ACCEPT_BI_FAILED,
     /** \brief
      *  Failed to connect and establish a uni directional stream.
      */
@@ -257,6 +265,22 @@ magic_endpoint_accept_any (
     MagicEndpoint_t * const * ep,
     Vec_uint8_t * alpn_out,
     Connection_t * * out);
+
+/** \brief
+ *  Accept a new connection on this endpoint.
+ *
+ *  Does not prespecify the ALPN, and but rather returns it.
+ *
+ *  Does not block, the provided callback will be called the next time a new connection is accepted or
+ *  when an error occurs.
+ *  `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
+ *  called from another thread.
+ */
+void
+magic_endpoint_accept_any_cb (
+    MagicEndpoint_t * ep,
+    void const * ctx,
+    void (*cb)(void const *, MagicEndpointResult_t, Vec_uint8_t, Connection_t *));
 
 /** \brief
  *  The options to configure derp.
