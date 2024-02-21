@@ -68,6 +68,7 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
     return -1;
   }
 
+  // Accept uni directional connection
   RecvStream_t * recv_stream = recv_stream_default();
   res = connection_accept_uni(&conn, &recv_stream);
   if (res != 0) {
@@ -101,6 +102,55 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
   }
 
   fflush(stdout);
+
+  // Cleanup
+  free(recv_str);
+  recv_stream_free(recv_stream);
+
+  // Accept bi directional connection
+  printf("accepting bi\n");
+  recv_stream = recv_stream_default();
+  SendStream_t * send_stream = send_stream_default();
+  res = connection_accept_bi(&conn, &send_stream,&recv_stream);
+  if (res != 0) {
+    fprintf(stderr, "failed to accept stream");
+    return -1;
+  }
+
+  printf("receving data\n");
+  read = recv_stream_read(&recv_stream, recv_buffer_slice);
+  if (read == -1) {
+    fprintf(stderr, "failed to read data");
+    return -1;
+  }
+
+  // assume they sent us a nice string
+  recv_str = malloc(read + 1);
+  memcpy(recv_str, recv_buffer, read);
+  recv_str[read] = '\0';
+  if (json_output) {
+    // ..
+  } else {
+    printf("received: '%s'\n", recv_str);
+  }
+
+  // send response
+  slice_ref_uint8_t buffer;
+  buffer.ptr = (uint8_t *) &recv_str[0];
+  buffer.len = strlen(recv_str);
+  printf("sending data\n");
+  int ret = send_stream_write(&send_stream, buffer);
+  if (ret != 0) {
+    fprintf(stderr, "failed to send data\n");
+    return -1;
+  }
+
+  // finish
+  ret = send_stream_finish(send_stream);
+  if (ret != 0) {
+    fprintf(stderr, "failed to finish sending\n");
+    return -1;
+  }
 
   // Cleanup
   free(recv_str);
@@ -204,7 +254,56 @@ run_client (
   uint64_t rtt = connection_rtt(&conn);
   printf("Estimated RTT: %llu ms\n", rtt);
 
+  // Open bidirectional stream
+  printf("open_bi\n");
+  send_stream = send_stream_default();
+  RecvStream_t * recv_stream = recv_stream_default();
+  ret = connection_open_bi(&conn, &send_stream, &recv_stream);
+  if (ret != 0) {
+    fprintf(stderr, "failed to establish stream\n");
+    return -1;
+  }
+
+  // send data
+  buffer.ptr = (uint8_t *) &data[0];
+  buffer.len = strlen(data);
+
+  printf("sending data\n");
+  ret = send_stream_write(&send_stream, buffer);
+  if (ret != 0) {
+    fprintf(stderr, "failed to send data\n");
+    return -1;
+  }
+
+  uint8_t * recv_buffer = malloc(512);
+  slice_mut_uint8_t recv_buffer_slice;
+  recv_buffer_slice.ptr = recv_buffer;
+  recv_buffer_slice.len = 512;
+
+  printf("receving data\n");
+  int read = recv_stream_read(&recv_stream, recv_buffer_slice);
+  if (read == -1) {
+    fprintf(stderr, "failed to read data");
+    return -1;
+  }
+
+  // assume they sent us a nice string
+  char * recv_str = malloc(read + 1);
+  memcpy(recv_str, recv_buffer, read);
+  recv_str[read] = '\0';
+  printf("received: '%s'\n", recv_str);
+
+  // finish
+  ret = send_stream_finish(send_stream);
+  if (ret != 0) {
+    fprintf(stderr, "failed to finish sending\n");
+    return -1;
+  }
+
   // cleanup
+  free(recv_str);
+  free(recv_buffer);
+  recv_stream_free(recv_stream);
   connection_free(conn);
 
   return 0;
