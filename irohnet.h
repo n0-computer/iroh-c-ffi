@@ -359,6 +359,14 @@ magic_endpoint_config_add_alpn (
     slice_ref_uint8_t alpn);
 
 /** \brief
+ *  Sets the given secret key to use.
+ */
+void
+magic_endpoint_config_add_secret_key (
+    MagicEndpointConfig_t * config,
+    SecretKey_t * secret_key);
+
+/** \brief
  *  Generate a default magic endpoint configuration.
  *
  *  Must be freed using `magic_endpoing_config_free`.

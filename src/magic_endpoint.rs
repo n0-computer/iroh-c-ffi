@@ -68,6 +68,15 @@ pub fn magic_endpoint_config_add_alpn(
     });
 }
 
+/// Sets the given secret key to use.
+#[ffi_export]
+pub fn magic_endpoint_config_add_secret_key(
+    config: &mut MagicEndpointConfig,
+    secret_key: repr_c::Box<SecretKey>,
+) {
+    config.secret_key = secret_key;
+}
+
 /// Generate a default endpoint.
 ///
 /// Must be freed using `magic_endpoint_free`.
