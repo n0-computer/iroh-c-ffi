@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use safer_ffi::{prelude::*, slice, vec};
+use tokio::sync::RwLock;
 
 use crate::addr::NodeAddr;
 use crate::key::{secret_key_generate, SecretKey};
@@ -82,7 +83,7 @@ pub fn magic_endpoint_config_add_secret_key(
 /// Must be freed using `magic_endpoint_free`.
 #[ffi_export]
 pub fn magic_endpoint_default() -> repr_c::Box<MagicEndpoint> {
-    Box::new(MagicEndpoint { ep: None }).into()
+    Box::new(MagicEndpoint { ep: None.into() }).into()
 }
 
 /// Frees the magic endpoint.
@@ -99,6 +100,8 @@ pub fn magic_endpoint_free(ep: repr_c::Box<MagicEndpoint>) {
 pub fn magic_endpoint_network_change(ep: &repr_c::Box<MagicEndpoint>) {
     TOKIO_EXECUTOR.block_on(async move {
         ep.ep
+            .read()
+            .await
             .as_ref()
             .expect("endpoint not initialized")
             .network_change()
@@ -110,7 +113,7 @@ pub fn magic_endpoint_network_change(ep: &repr_c::Box<MagicEndpoint>) {
 #[derive_ReprC]
 #[repr(opaque)]
 pub struct MagicEndpoint {
-    ep: Option<iroh_net::magic_endpoint::MagicEndpoint>,
+    ep: RwLock<Option<iroh_net::magic_endpoint::MagicEndpoint>>,
 }
 
 /// Result of dealing with a magic endpoint.
@@ -149,7 +152,7 @@ pub enum MagicEndpointResult {
 pub fn magic_endpoint_bind(
     config: &MagicEndpointConfig,
     port: u16,
-    out: &mut repr_c::Box<MagicEndpoint>,
+    out: &repr_c::Box<MagicEndpoint>,
 ) -> MagicEndpointResult {
     let mut alpn_protocols = Vec::with_capacity(config.alpn_protocols.len());
     for protocol in config.alpn_protocols.iter() {
@@ -166,7 +169,7 @@ pub fn magic_endpoint_bind(
 
         match builder {
             Ok(ep) => {
-                out.ep.replace(ep);
+                out.ep.write().await.replace(ep);
                 MagicEndpointResult::Ok
             }
             Err(_err) => MagicEndpointResult::BindError,
@@ -379,6 +382,8 @@ pub fn magic_endpoint_accept(
     let res = TOKIO_EXECUTOR.block_on(async move {
         let conn = ep
             .ep
+            .read()
+            .await
             .as_ref()
             .expect("endpoint not initalized")
             .accept()
@@ -416,6 +421,8 @@ pub fn magic_endpoint_accept_any(
     let res = TOKIO_EXECUTOR.block_on(async move {
         let conn = ep
             .ep
+            .read()
+            .await
             .as_ref()
             .expect("endpoint not initalized")
             .accept()
@@ -472,6 +479,8 @@ pub fn magic_endpoint_accept_any_cb(
         ) -> anyhow::Result<(String, quinn::Connection)> {
             let conn = ep
                 .ep
+                .read()
+                .await
                 .as_ref()
                 .expect("endpoint not initalized")
                 .accept()
@@ -579,6 +588,8 @@ pub fn magic_endpoint_connect(
         let node_addr = node_addr.into();
         let conn = ep
             .ep
+            .read()
+            .await
             .as_ref()
             .expect("endpoint not initialized")
             .connect(node_addr, alpn.as_ref())
@@ -605,6 +616,8 @@ pub fn magic_endpoint_my_addr(
     let res = TOKIO_EXECUTOR.block_on(async move {
         let addr = ep
             .ep
+            .read()
+            .await
             .as_ref()
             .expect("endpoint not initialized")
             .my_addr()

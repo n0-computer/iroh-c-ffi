@@ -348,7 +348,7 @@ MagicEndpointResult_t
 magic_endpoint_bind (
     MagicEndpointConfig_t const * config,
     uint16_t port,
-    MagicEndpoint_t * * out);
+    MagicEndpoint_t * const * out);
 
 /** \brief
  *  Add the given ALPN to the list of accepted ALPNs.
