@@ -251,7 +251,7 @@ MagicEndpointResult_t
 magic_endpoint_accept (
     MagicEndpoint_t * const * ep,
     slice_ref_uint8_t expected_alpn,
-    Connection_t * * out);
+    Connection_t * const * out);
 
 /** \brief
  *  Accept a new connection on this endpoint.
@@ -264,7 +264,7 @@ MagicEndpointResult_t
 magic_endpoint_accept_any (
     MagicEndpoint_t * const * ep,
     Vec_uint8_t * alpn_out,
-    Connection_t * * out);
+    Connection_t * const * out);
 
 /** \brief
  *  Accept a new connection on this endpoint.
@@ -447,7 +447,7 @@ magic_endpoint_connect (
     MagicEndpoint_t * const * ep,
     slice_ref_uint8_t alpn,
     NodeAddr_t node_addr,
-    Connection_t * * out);
+    Connection_t * const * out);
 
 /** \brief
  *  Generate a default endpoint.

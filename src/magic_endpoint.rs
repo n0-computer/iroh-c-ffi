@@ -89,7 +89,9 @@ pub fn magic_endpoint_default() -> repr_c::Box<MagicEndpoint> {
 /// Frees the magic endpoint.
 #[ffi_export]
 pub fn magic_endpoint_free(ep: repr_c::Box<MagicEndpoint>) {
-    drop(ep);
+    TOKIO_EXECUTOR.block_on(async move {
+        let _ = ep.ep.write().await.take();
+    });
 }
 
 /// Let the endpoint know that the underlying network conditions might have changed.
@@ -188,6 +190,8 @@ pub fn connection_accept_uni(
     let res = TOKIO_EXECUTOR.block_on(async move {
         let recv_stream = conn
             .connection
+            .read()
+            .await
             .as_ref()
             .expect("connection not initialized")
             .accept_uni()
@@ -218,6 +222,8 @@ pub fn connection_accept_bi(
     let res = TOKIO_EXECUTOR.block_on(async move {
         let (send_stream, recv_stream) = conn
             .connection
+            .read()
+            .await
             .as_ref()
             .expect("connection not initialized")
             .accept_bi()
@@ -242,7 +248,7 @@ pub fn connection_accept_bi(
 #[repr(opaque)]
 #[derive(Debug, Default)]
 pub struct Connection {
-    connection: Option<quinn::Connection>,
+    connection: RwLock<Option<quinn::Connection>>,
 }
 
 /// Result must be freed using `connection_free`.
@@ -254,17 +260,23 @@ pub fn connection_default() -> repr_c::Box<Connection> {
 /// Frees the connection.
 #[ffi_export]
 pub fn connection_free(conn: repr_c::Box<Connection>) {
-    drop(conn);
+    TOKIO_EXECUTOR.block_on(async move {
+        let _ = conn.connection.write().await.take();
+    });
 }
 
 /// Estimated roundtrip time for the current connection in milli seconds.
 #[ffi_export]
 pub fn connection_rtt(conn: &repr_c::Box<Connection>) -> u64 {
-    conn.connection
-        .as_ref()
-        .expect("connection not initialized")
-        .rtt()
-        .as_millis() as u64
+    TOKIO_EXECUTOR.block_on(async move {
+        conn.connection
+            .read()
+            .await
+            .as_ref()
+            .expect("connection not initialized")
+            .rtt()
+            .as_millis() as u64
+    })
 }
 
 /// Send a single datgram (unreliably).
@@ -277,16 +289,20 @@ pub fn connection_write_datagram(
 ) -> MagicEndpointResult {
     // TODO: is there a way to avoid this allocation?
     let data = bytes::Bytes::copy_from_slice(data.as_ref());
-    let res = connection
-        .connection
-        .as_ref()
-        .expect("connection not initialized")
-        .send_datagram(data);
+    TOKIO_EXECUTOR.block_on(async move {
+        let res = connection
+            .connection
+            .read()
+            .await
+            .as_ref()
+            .expect("connection not initialized")
+            .send_datagram(data);
 
-    match res {
-        Ok(()) => MagicEndpointResult::Ok,
-        Err(_err) => MagicEndpointResult::SendError,
-    }
+        match res {
+            Ok(()) => MagicEndpointResult::Ok,
+            Err(_err) => MagicEndpointResult::SendError,
+        }
+    })
 }
 
 /// Reads a datgram.
@@ -302,6 +318,8 @@ pub fn connection_read_datagram(
     let res = TOKIO_EXECUTOR.block_on(async move {
         connection
             .connection
+            .read()
+            .await
             .as_ref()
             .expect("connection not initialized")
             .read_datagram()
@@ -338,6 +356,8 @@ pub fn connection_read_datagram_timeout(
         tokio::time::timeout(timeout, async move {
             connection
                 .connection
+                .read()
+                .await
                 .as_ref()
                 .expect("connection not initialized")
                 .read_datagram()
@@ -362,12 +382,16 @@ pub fn connection_read_datagram_timeout(
 /// Returns the maximum datagram size. `0` if it is not supported.
 #[ffi_export]
 pub fn connection_max_datagram_size(connection: &repr_c::Box<Connection>) -> usize {
-    connection
-        .connection
-        .as_ref()
-        .expect("connection not initialized")
-        .max_datagram_size()
-        .unwrap_or(0)
+    TOKIO_EXECUTOR.block_on(async move {
+        connection
+            .connection
+            .read()
+            .await
+            .as_ref()
+            .expect("connection not initialized")
+            .max_datagram_size()
+            .unwrap_or(0)
+    })
 }
 
 /// Accept a new connection on this endpoint.
@@ -377,7 +401,7 @@ pub fn connection_max_datagram_size(connection: &repr_c::Box<Connection>) -> usi
 pub fn magic_endpoint_accept(
     ep: &repr_c::Box<MagicEndpoint>,
     expected_alpn: slice::slice_ref<'_, u8>,
-    out: &mut repr_c::Box<Connection>,
+    out: &repr_c::Box<Connection>,
 ) -> MagicEndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         let conn = ep
@@ -389,20 +413,18 @@ pub fn magic_endpoint_accept(
             .accept()
             .await
             .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
-        let (remote_node_id, alpn, connection) = iroh_net::magic_endpoint::accept_conn(conn)
+        let (_remote_node_id, alpn, connection) = iroh_net::magic_endpoint::accept_conn(conn)
             .await
             .context("accept_conn")?;
         if alpn.as_bytes() != expected_alpn.as_slice() {
             anyhow::bail!("unexpected alpn {}", alpn);
         }
-        anyhow::Ok((remote_node_id, connection))
+        out.connection.write().await.replace(connection);
+        anyhow::Ok(())
     });
 
     match res {
-        Ok((_remote_node_id, connection)) => {
-            out.connection.replace(connection);
-            MagicEndpointResult::Ok
-        }
+        Ok(()) => MagicEndpointResult::Ok,
         Err(_err) => MagicEndpointResult::AcceptUniFailed,
     }
 }
@@ -416,7 +438,7 @@ pub fn magic_endpoint_accept(
 pub fn magic_endpoint_accept_any(
     ep: &repr_c::Box<MagicEndpoint>,
     alpn_out: &mut vec::Vec<u8>,
-    out: &mut repr_c::Box<Connection>,
+    out: &repr_c::Box<Connection>,
 ) -> MagicEndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         let conn = ep
@@ -428,21 +450,19 @@ pub fn magic_endpoint_accept_any(
             .accept()
             .await
             .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
-        let (remote_node_id, alpn, connection) = iroh_net::magic_endpoint::accept_conn(conn)
+        let (_remote_node_id, alpn, connection) = iroh_net::magic_endpoint::accept_conn(conn)
             .await
             .context("accept_conn")?;
 
         alpn_out.with_rust_mut(|v| {
             *v = alpn.as_bytes().to_vec();
         });
-        anyhow::Ok((remote_node_id, connection))
+        out.connection.write().await.replace(connection);
+        anyhow::Ok(())
     });
 
     match res {
-        Ok((_remote_node_id, connection)) => {
-            out.connection.replace(connection);
-            MagicEndpointResult::Ok
-        }
+        Ok(()) => MagicEndpointResult::Ok,
         Err(_err) => MagicEndpointResult::AcceptFailed,
     }
 }
@@ -497,7 +517,7 @@ pub fn magic_endpoint_accept_any_cb(
             Ok((alpn, connection)) => {
                 let alpn = alpn.as_bytes().to_vec().into();
                 let conn = Box::new(Connection {
-                    connection: Some(connection),
+                    connection: Some(connection).into(),
                 })
                 .into();
                 unsafe {
@@ -527,6 +547,8 @@ pub fn connection_open_uni(
     let res = TOKIO_EXECUTOR.block_on(async move {
         let stream = conn
             .connection
+            .read()
+            .await
             .as_ref()
             .expect("connection not initialized")
             .open_uni()
@@ -556,6 +578,8 @@ pub fn connection_open_bi(
     let res = TOKIO_EXECUTOR.block_on(async move {
         let (send_stream, recv_stream) = conn
             .connection
+            .read()
+            .await
             .as_ref()
             .expect("connection not initialized")
             .open_bi()
@@ -582,7 +606,7 @@ pub fn magic_endpoint_connect(
     ep: &repr_c::Box<MagicEndpoint>,
     alpn: slice::slice_ref<'_, u8>,
     node_addr: NodeAddr,
-    out: &mut repr_c::Box<Connection>,
+    out: &repr_c::Box<Connection>,
 ) -> MagicEndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         let node_addr = node_addr.into();
@@ -594,15 +618,13 @@ pub fn magic_endpoint_connect(
             .expect("endpoint not initialized")
             .connect(node_addr, alpn.as_ref())
             .await?;
+        out.connection.write().await.replace(conn);
 
-        anyhow::Ok(conn)
+        anyhow::Ok(())
     });
 
     match res {
-        Ok(connection) => {
-            out.connection.replace(connection);
-            MagicEndpointResult::Ok
-        }
+        Ok(()) => MagicEndpointResult::Ok,
         Err(_err) => MagicEndpointResult::ConnectUniError,
     }
 }
