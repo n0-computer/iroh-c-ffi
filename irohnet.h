@@ -49,7 +49,7 @@ enum MagicEndpointResult {
      */
     MAGIC_ENDPOINT_RESULT_BIND_ERROR,
     /** \brief
-     *  Failed to accept a uni directional stream,
+     *  Failed to accept a connection.
      */
     MAGIC_ENDPOINT_RESULT_ACCEPT_FAILED,
     /** \brief

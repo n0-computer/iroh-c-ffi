@@ -127,7 +127,7 @@ pub enum MagicEndpointResult {
     Ok = 0,
     /// Failed to bind.
     BindError,
-    /// Failed to accept a uni directional stream,
+    /// Failed to accept a connection.
     AcceptFailed,
     /// Failed to accept a uni directional stream,
     AcceptUniFailed,
@@ -425,7 +425,7 @@ pub fn magic_endpoint_accept(
 
     match res {
         Ok(()) => MagicEndpointResult::Ok,
-        Err(_err) => MagicEndpointResult::AcceptUniFailed,
+        Err(_err) => MagicEndpointResult::AcceptFailed,
     }
 }
 
@@ -666,6 +666,7 @@ mod tests {
         },
         util::rust_buffer_alloc,
     };
+    use std::sync::{Arc, Mutex};
 
     use super::*;
 
@@ -916,6 +917,169 @@ mod tests {
             let finish_res = send_stream_finish(send_stream);
             assert_eq!(finish_res, MagicEndpointResult::Ok);
             client_s.send(()).unwrap();
+        });
+
+        server_thread.join().unwrap();
+        client_thread.join().unwrap();
+    }
+
+    #[test]
+    fn test_two_connections() {
+        let alpn1: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
+        let alpn2: vec::Vec<u8> = b"/cool/alpn/2".to_vec().into();
+
+        // create config
+        let mut config_server = magic_endpoint_config_default();
+        magic_endpoint_config_add_alpn(&mut config_server, alpn1.as_ref().into());
+        magic_endpoint_config_add_alpn(&mut config_server, alpn2.as_ref().into());
+
+        let mut config_client = magic_endpoint_config_default();
+        magic_endpoint_config_add_alpn(&mut config_client, alpn1.as_ref().into());
+        magic_endpoint_config_add_alpn(&mut config_client, alpn2.as_ref().into());
+
+        let (s, r) = std::sync::mpsc::channel();
+        let (client1_s, client1_r) = std::sync::mpsc::channel();
+        let (client2_s, client2_r) = std::sync::mpsc::channel();
+
+        // setup server
+        let alpn1_s = alpn1.clone();
+        let alpn2_s = alpn2.clone();
+        let server_thread = std::thread::spawn(move || {
+            // create magic endpoint and bind
+            let ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_server, 0, &ep);
+            assert_eq!(bind_res, MagicEndpointResult::Ok);
+
+            let mut node_addr = node_addr_default();
+            let res = magic_endpoint_my_addr(&ep, &mut node_addr);
+            assert_eq!(res, MagicEndpointResult::Ok);
+
+            s.send(node_addr).unwrap();
+
+            let mut handles = Vec::new();
+            let ep = Arc::new(ep);
+            let clients = Arc::new(Mutex::new(vec![client1_r, client2_r]));
+            for i in 0..2 {
+                let ep = ep.clone();
+                let alpn1_s = alpn1_s.clone();
+                let alpn2_s = alpn2_s.clone();
+
+                let clients = clients.clone();
+                handles.push(std::thread::spawn(move || {
+                    // accept connection
+                    println!("[s][{i}] accepting conn");
+                    let mut conn = connection_default();
+                    let mut alpn = vec::Vec::EMPTY;
+                    let res = magic_endpoint_accept_any(&ep, &mut alpn, &mut conn);
+                    assert_eq!(res, MagicEndpointResult::Ok);
+
+                    let (j, client_r) = if alpn.as_ref() == alpn1_s.as_ref() {
+                        (0, clients.lock().unwrap().remove(0))
+                    } else if alpn.as_ref() == alpn2_s.as_ref() {
+                        (1, clients.lock().unwrap().pop().unwrap())
+                    } else {
+                        panic!("unexpectd alpn: {:?}", alpn);
+                    };
+
+                    let mut send_stream = send_stream_default();
+                    let mut recv_stream = recv_stream_default();
+                    let accept_res =
+                        connection_accept_bi(&conn, &mut send_stream, &mut recv_stream);
+                    assert_eq!(accept_res, MagicEndpointResult::Ok);
+
+                    println!("[s][{j}] reading");
+
+                    let mut recv_buffer = vec![0u8; 1024];
+                    let read_res =
+                        recv_stream_read(&mut recv_stream, (&mut recv_buffer[..]).into());
+                    assert!(read_res > 0);
+                    assert_eq!(
+                        std::str::from_utf8(&recv_buffer[..read_res as usize]).unwrap(),
+                        &format!("hello world {j}"),
+                    );
+
+                    println!("[s][{j}] sending");
+                    let send_res = send_stream_write(
+                        &mut send_stream,
+                        format!("hello client {j}").as_bytes().into(),
+                    );
+                    assert_eq!(send_res, MagicEndpointResult::Ok);
+
+                    let res = send_stream_finish(send_stream);
+                    assert_eq!(res, MagicEndpointResult::Ok);
+                    client_r.recv().unwrap();
+                }));
+            }
+
+            for handle in handles {
+                handle.join().unwrap();
+            }
+        });
+
+        // setup client
+        let client_thread = std::thread::spawn(move || {
+            // create magic endpoint and bind
+            let ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_client, 0, &ep);
+            assert_eq!(bind_res, MagicEndpointResult::Ok);
+
+            // wait for addr from server
+            let node_addr = r.recv().unwrap();
+
+            let mut handles = Vec::new();
+            let ep = Arc::new(ep);
+            let clients = [client1_s, client2_s];
+
+            for (i, client_s) in clients.into_iter().enumerate() {
+                let ep = ep.clone();
+                let alpn1 = alpn1.clone();
+                let alpn2 = alpn2.clone();
+                let node_addr = node_addr.clone();
+
+                handles.push(std::thread::spawn(move || {
+                    // wait for a moment to make sure the server is ready
+                    std::thread::sleep(std::time::Duration::from_millis(100));
+
+                    println!("[c][{i}] dialing");
+                    // connect to server
+                    let mut conn = connection_default();
+                    let alpn = if i == 0 { alpn1 } else { alpn2 };
+                    let connect_res =
+                        magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+                    assert_eq!(connect_res, MagicEndpointResult::Ok);
+
+                    let mut send_stream = send_stream_default();
+                    let mut recv_stream = recv_stream_default();
+                    let open_res = connection_open_bi(&conn, &mut send_stream, &mut recv_stream);
+                    assert_eq!(open_res, MagicEndpointResult::Ok);
+
+                    println!("[c][{i}] sending");
+                    let send_res = send_stream_write(
+                        &mut send_stream,
+                        format!("hello world {i}").as_bytes().into(),
+                    );
+                    assert_eq!(send_res, MagicEndpointResult::Ok);
+
+                    println!("[c][{i}] reading");
+
+                    let mut recv_buffer = vec![0u8; 1024];
+                    let read_res =
+                        recv_stream_read(&mut recv_stream, (&mut recv_buffer[..]).into());
+                    assert!(read_res > 0);
+                    assert_eq!(
+                        std::str::from_utf8(&recv_buffer[..read_res as usize]).unwrap(),
+                        &format!("hello client {i}")
+                    );
+
+                    let finish_res = send_stream_finish(send_stream);
+                    assert_eq!(finish_res, MagicEndpointResult::Ok);
+                    client_s.send(()).unwrap();
+                }));
+            }
+
+            for handle in handles {
+                handle.join().unwrap();
+            }
         });
 
         server_thread.join().unwrap();
