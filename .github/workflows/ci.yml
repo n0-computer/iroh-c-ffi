@@ -198,8 +198,18 @@ jobs:
                 & "./main" "client" $node_id $derp $addrs
                 Start-Sleep -Seconds 1
 
-                # Read the last line of the file
-                $last_line = Get-Content server_output.json | Select-Object -Last 1
+                # Read the 3rd line of the file
+                $last_line = Get-Content server_output.json | Select-Object -Index 2
+                # Parse the JSON
+                $json_output = ConvertFrom-Json $last_line
+                # Ensure json_output is as expected
+                if ($json_output.data -ne "hello world from C") {
+                    Write-Output "Error: Unexpected output"
+                    exit 1
+                }
+
+                # Repeat for the 6th line of the file
+                $last_line = Get-Content server_output.json | Select-Object -Index 5
                 # Parse the JSON
                 $json_output = ConvertFrom-Json $last_line
                 # Ensure json_output is as expected
