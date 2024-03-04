@@ -28,7 +28,7 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
   NodeAddr_t my_addr = node_addr_default();
   int addr_res = magic_endpoint_my_addr(&ep, &my_addr);
   if (addr_res != 0) {
-    fprintf(stderr, "faile to get my address");
+    fprintf(stderr, "failed to get my address");
     return -1;
   }
   char * node_id_str = public_key_as_base32(&my_addr.node_id);
@@ -108,7 +108,11 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
   recv_stream_free(recv_stream);
 
   // Accept bi directional connection
-  printf("accepting bi\n");
+  if (json_output) {
+    printf("{ \"type\": \"server\", \"status\": \"accepting bi\" }\n");
+  } else {
+    printf("accepting bi\n");
+  }
   recv_stream = recv_stream_default();
   SendStream_t * send_stream = send_stream_default();
   res = connection_accept_bi(&conn, &send_stream,&recv_stream);
@@ -117,7 +121,11 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
     return -1;
   }
 
-  printf("receving data\n");
+  if (json_output) {
+    printf("{ \"type\": \"server\", \"status\": \"receiving data\" }\n");
+  } else {
+    printf("receiving data\n");
+  }
   read = recv_stream_read(&recv_stream, recv_buffer_slice);
   if (read == -1) {
     fprintf(stderr, "failed to read data");
@@ -129,7 +137,7 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
   memcpy(recv_str, recv_buffer, read);
   recv_str[read] = '\0';
   if (json_output) {
-    // ..
+    printf("{ \"type\": \"server\", \"status\": \"received\", \"data\": \"%s\" }\n", recv_str);
   } else {
     printf("received: '%s'\n", recv_str);
   }
@@ -138,7 +146,11 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
   slice_ref_uint8_t buffer;
   buffer.ptr = (uint8_t *) &recv_str[0];
   buffer.len = strlen(recv_str);
-  printf("sending data\n");
+  if (json_output) {
+    printf("{ \"type\": \"server\", \"status\": \"sending data\" }\n");
+  } else {
+    printf("sending data\n");
+  }
   int ret = send_stream_write(&send_stream, buffer);
   if (ret != 0) {
     fprintf(stderr, "failed to send data\n");
@@ -151,6 +163,8 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
     fprintf(stderr, "failed to finish sending\n");
     return -1;
   }
+
+  fflush(stdout);
 
   // Cleanup
   free(recv_str);
