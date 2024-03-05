@@ -84,8 +84,8 @@ jobs:
                 ./main client $node_id $derp ${addrs[@]}
                 sleep 1
 
-                # Read the last line of the file
-                last_line=$(tail -n 1 server_output.json)
+                # Read the 3rd line of the file
+                last_line=$(sed -n '3p' server_output.json)
                 # Parse the JSON
                 json_output=$(echo $last_line | jq -r '.data')
                 # Ensure json_output is as expected
@@ -95,6 +95,19 @@ jobs:
                     cat server_output.json
                     exit 1
                 fi
+
+                # Repeat for the 6th line of the file
+                last_line=$(sed -n '6p' server_output.json)
+                # Parse the JSON
+                json_output=$(echo $last_line | jq -r '.data')
+                # Ensure json_output is as expected
+                if [[ "$json_output" != "hello world from C" ]]; then
+                    echo "Error: Unexpected output"
+                    echo "server_output.json:"
+                    cat server_output.json
+                    exit 1
+                fi
+
                 echo "Success"
             - name: check headers
               shell: bash
@@ -185,8 +198,18 @@ jobs:
                 & "./main" "client" $node_id $derp $addrs
                 Start-Sleep -Seconds 1
 
-                # Read the last line of the file
-                $last_line = Get-Content server_output.json | Select-Object -Last 1
+                # Read the 3rd line of the file
+                $last_line = Get-Content server_output.json | Select-Object -Index 2
+                # Parse the JSON
+                $json_output = ConvertFrom-Json $last_line
+                # Ensure json_output is as expected
+                if ($json_output.data -ne "hello world from C") {
+                    Write-Output "Error: Unexpected output"
+                    exit 1
+                }
+
+                # Repeat for the 6th line of the file
+                $last_line = Get-Content server_output.json | Select-Object -Index 5
                 # Parse the JSON
                 $json_output = ConvertFrom-Json $last_line
                 # Ensure json_output is as expected
