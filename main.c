@@ -326,6 +326,8 @@ run_client (
 int
 main (int argc, char const * const argv[])
 {
+  iroh_enable_tracing();
+
   if (argc < 2) {
     fprintf(stderr, "Usage: must supply at least client or server\n");
     return -1;

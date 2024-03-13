@@ -100,6 +100,8 @@ void *client_thread_func(void *arg) {
 }
 
 int main(int argc, char const *const argv[]) {
+  iroh_enable_tracing();
+
   pthread_t client_threads[2];
   ThreadParam client_params[2];
 

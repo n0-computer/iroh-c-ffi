@@ -238,6 +238,14 @@ connection_write_datagram (
     slice_ref_uint8_t data);
 
 /** \brief
+ *  Enables tracing for iroh.
+ *
+ *  Log level can be controlled using the env variable `IROH_NET_LOG`.
+ */
+void
+iroh_enable_tracing (void);
+
+/** \brief
  *  An endpoint that leverages a quic endpoint, backed by a magic socket.
  */
 typedef struct MagicEndpoint MagicEndpoint_t;

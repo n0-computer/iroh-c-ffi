@@ -10,6 +10,8 @@ Connection_t *conn1;
 Connection_t *conn2;
 
 int main(int argc, char const *const argv[]) {
+  iroh_enable_tracing();
+
   RecvStream_t *recv_stream = recv_stream_default();
   RecvStream_t *recv_stream2 = recv_stream_default();
   SendStream_t *send_stream = send_stream_default();
