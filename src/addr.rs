@@ -1,4 +1,4 @@
-use iroh_net::ticket::NodeTicket;
+use iroh_net::{ticket::NodeTicket, derp::DerpUrl};
 use safer_ffi::{prelude::*, vec};
 
 use crate::key::PublicKey;
@@ -201,11 +201,11 @@ pub fn socket_addr_from_string(
 #[repr(opaque)]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Url {
-    url: Option<url::Url>,
+    url: Option<DerpUrl>,
 }
 
-impl From<url::Url> for Url {
-    fn from(url: url::Url) -> Self {
+impl From<DerpUrl> for Url {
+    fn from(url: DerpUrl) -> Self {
         Url { url: Some(url) }
     }
 }
@@ -246,7 +246,7 @@ pub enum AddrResult {
 /// Try to parse a url from a string.
 #[ffi_export]
 pub fn url_from_string(input: char_p::Ref<'_>, out: &mut repr_c::Box<Url>) -> AddrResult {
-    match input.to_str().parse::<url::Url>() {
+    match input.to_str().parse::<DerpUrl>() {
         Ok(url) => {
             out.url.replace(url);
             AddrResult::Ok
@@ -267,7 +267,7 @@ mod tests {
         node_addr.node_id = public_key_default();
         node_addr_add_derp_url(
             &mut node_addr,
-            Box::new(Url::from("http://test.com".parse::<url::Url>().unwrap()))
+            Box::new(Url::from("http://test.com".parse::<DerpUrl>().unwrap()))
                 .try_into()
                 .unwrap(),
         );
