@@ -1,4 +1,4 @@
-use iroh_net::ticket::NodeTicket;
+use iroh_net::{relay::RelayUrl, ticket::NodeTicket};
 use safer_ffi::{prelude::*, vec};
 
 use crate::key::PublicKey;
@@ -10,8 +10,8 @@ use crate::key::PublicKey;
 pub struct NodeAddr {
     /// The node's public key.
     pub node_id: PublicKey,
-    /// The peer's home DERP url.
-    pub derp_url: Option<repr_c::Box<Url>>,
+    /// The peer's home RELAY url.
+    pub relay_url: Option<repr_c::Box<Url>>,
     /// Socket addresses where the peer might be reached directly.
     pub direct_addresses: vec::Vec<repr_c::Box<SocketAddr>>,
 }
@@ -30,8 +30,8 @@ impl From<NodeAddr> for iroh_net::magic_endpoint::NodeAddr {
         iroh_net::magic_endpoint::NodeAddr {
             node_id: addr.node_id.into(),
             info: iroh_net::magic_endpoint::AddrInfo {
-                derp_url: addr
-                    .derp_url
+                relay_url: addr
+                    .relay_url
                     .map(|u| u.url.clone().expect("url not initialized")),
                 direct_addresses,
             },
@@ -50,9 +50,9 @@ impl From<iroh_net::magic_endpoint::NodeAddr> for NodeAddr {
             .into();
         NodeAddr {
             node_id: addr.node_id.into(),
-            derp_url: addr
+            relay_url: addr
                 .info
-                .derp_url
+                .relay_url
                 .map(|url| Box::new(Url { url: Some(url) }).into()),
             direct_addresses,
         }
@@ -66,7 +66,7 @@ impl From<iroh_net::magic_endpoint::NodeAddr> for NodeAddr {
 pub fn node_addr_new(node_id: PublicKey) -> NodeAddr {
     NodeAddr {
         node_id,
-        derp_url: None,
+        relay_url: None,
         direct_addresses: vec::Vec::EMPTY,
     }
 }
@@ -78,7 +78,7 @@ pub fn node_addr_new(node_id: PublicKey) -> NodeAddr {
 pub fn node_addr_default() -> NodeAddr {
     NodeAddr {
         node_id: PublicKey::default(),
-        derp_url: None,
+        relay_url: None,
         direct_addresses: vec::Vec::EMPTY,
     }
 }
@@ -115,10 +115,10 @@ pub fn node_addr_free(node_addr: NodeAddr) {
     drop(node_addr)
 }
 
-/// Add a derp url to the peer's addr info.
+/// Add a relay url to the peer's addr info.
 #[ffi_export]
-pub fn node_addr_add_derp_url(addr: &mut NodeAddr, derp_url: repr_c::Box<Url>) {
-    addr.derp_url.replace(derp_url);
+pub fn node_addr_add_relay_url(addr: &mut NodeAddr, relay_url: repr_c::Box<Url>) {
+    addr.relay_url.replace(relay_url);
 }
 
 /// Add the given direct addresses to the peer's addr info.
@@ -137,10 +137,10 @@ pub fn node_addr_direct_addresses_nth(addr: &NodeAddr, i: usize) -> &SocketAddr 
     &addr.direct_addresses[i]
 }
 
-/// Get the derp url of this peer.
+/// Get the relay url of this peer.
 #[ffi_export]
-pub fn node_addr_derp_url(addr: &NodeAddr) -> Option<&repr_c::Box<Url>> {
-    addr.derp_url.as_ref()
+pub fn node_addr_relay_url(addr: &NodeAddr) -> Option<&repr_c::Box<Url>> {
+    addr.relay_url.as_ref()
 }
 
 /// Represents an IPv4 or IPv6 address, including a port number.
@@ -201,11 +201,11 @@ pub fn socket_addr_from_string(
 #[repr(opaque)]
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Url {
-    url: Option<url::Url>,
+    url: Option<RelayUrl>,
 }
 
-impl From<url::Url> for Url {
-    fn from(url: url::Url) -> Self {
+impl From<RelayUrl> for Url {
+    fn from(url: RelayUrl) -> Self {
         Url { url: Some(url) }
     }
 }
@@ -246,7 +246,7 @@ pub enum AddrResult {
 /// Try to parse a url from a string.
 #[ffi_export]
 pub fn url_from_string(input: char_p::Ref<'_>, out: &mut repr_c::Box<Url>) -> AddrResult {
-    match input.to_str().parse::<url::Url>() {
+    match input.to_str().parse::<RelayUrl>() {
         Ok(url) => {
             out.url.replace(url);
             AddrResult::Ok
@@ -265,9 +265,9 @@ mod tests {
     fn test_roundrip_string_node_addr() {
         let mut node_addr = node_addr_default();
         node_addr.node_id = public_key_default();
-        node_addr_add_derp_url(
+        node_addr_add_relay_url(
             &mut node_addr,
-            Box::new(Url::from("http://test.com".parse::<url::Url>().unwrap()))
+            Box::new(Url::from("http://test.com".parse::<RelayUrl>().unwrap()))
                 .try_into()
                 .unwrap(),
         );

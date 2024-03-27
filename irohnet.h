@@ -291,26 +291,26 @@ magic_endpoint_accept_any_cb (
     void (*cb)(void const *, MagicEndpointResult_t, Vec_uint8_t, Connection_t *));
 
 /** \brief
- *  The options to configure derp.
+ *  The options to configure relay.
  */
 /** \remark Has the same ABI as `uint8_t` **/
 #ifdef DOXYGEN
 typedef
 #endif
-enum DerpMode {
+enum RelayMode {
     /** \brief
-     *  Derp mode is entirely disabled
+     *  Relay mode is entirely disabled
      */
-    DERP_MODE_DISABLED,
+    RELAY_MODE_DISABLED,
     /** \brief
-     *  Default derp map is used.
+     *  Default relay map is used.
      */
-    DERP_MODE_DEFAULT,
+    RELAY_MODE_DEFAULT,
 }
 #ifndef DOXYGEN
 ; typedef uint8_t
 #endif
-DerpMode_t;
+RelayMode_t;
 
 /** \brief
  *  Same as [`Vec<T>`][`rust::Vec`], but with guaranteed `#[repr(C)]` layout
@@ -336,7 +336,7 @@ typedef struct SecretKey SecretKey_t;
  */
 typedef struct MagicEndpointConfig {
     /** <No documentation available> */
-    DerpMode_t derp_mode;
+    RelayMode_t relay_mode;
 
     /** <No documentation available> */
     Vec_Vec_uint8_t alpn_protocols;
@@ -435,9 +435,9 @@ typedef struct NodeAddr {
     PublicKey_t node_id;
 
     /** \brief
-     *  The peer's home DERP url.
+     *  The peer's home RELAY url.
      */
-    Url_t * derp_url;
+    Url_t * relay_url;
 
     /** \brief
      *  Socket addresses where the peer might be reached directly.
@@ -491,20 +491,20 @@ magic_endpoint_network_change (
     MagicEndpoint_t * const * ep);
 
 /** \brief
- *  Add a derp url to the peer's addr info.
- */
-void
-node_addr_add_derp_url (
-    NodeAddr_t * addr,
-    Url_t * derp_url);
-
-/** \brief
  *  Add the given direct addresses to the peer's addr info.
  */
 void
 node_addr_add_direct_address (
     NodeAddr_t * node_addr,
     SocketAddr_t * address);
+
+/** \brief
+ *  Add a relay url to the peer's addr info.
+ */
+void
+node_addr_add_relay_url (
+    NodeAddr_t * addr,
+    Url_t * relay_url);
 
 /** \brief
  *  Formats the given node addr as a string.
@@ -522,13 +522,6 @@ node_addr_as_str (
  */
 NodeAddr_t
 node_addr_default (void);
-
-/** \brief
- *  Get the derp url of this peer.
- */
-Url_t * const *
-node_addr_derp_url (
-    NodeAddr_t const * addr);
 
 /** \brief
  *  Get the nth direct addresses of this peer.
@@ -591,6 +584,13 @@ node_addr_from_string (
 NodeAddr_t
 node_addr_new (
     PublicKey_t node_id);
+
+/** \brief
+ *  Get the relay url of this peer.
+ */
+Url_t * const *
+node_addr_relay_url (
+    NodeAddr_t const * addr);
 
 /** \brief
  *  Returns the public key as a base32 string.

@@ -15,27 +15,27 @@ use crate::util::TOKIO_EXECUTOR;
 #[derive_ReprC]
 #[repr(C)]
 pub struct MagicEndpointConfig {
-    pub derp_mode: DerpMode,
+    pub relay_mode: RelayMode,
     pub alpn_protocols: vec::Vec<vec::Vec<u8>>,
     pub secret_key: repr_c::Box<SecretKey>,
 }
 
-/// The options to configure derp.
+/// The options to configure relay.
 #[derive_ReprC]
 #[repr(u8)]
 #[derive(Debug, Copy, Clone)]
-pub enum DerpMode {
-    /// Derp mode is entirely disabled
+pub enum RelayMode {
+    /// Relay mode is entirely disabled
     Disabled,
-    /// Default derp map is used.
+    /// Default relay map is used.
     Default,
 }
 
-impl From<DerpMode> for iroh_net::derp::DerpMode {
-    fn from(value: DerpMode) -> Self {
+impl From<RelayMode> for iroh_net::relay::RelayMode {
+    fn from(value: RelayMode) -> Self {
         match value {
-            DerpMode::Disabled => iroh_net::derp::DerpMode::Disabled,
-            DerpMode::Default => iroh_net::derp::DerpMode::Default,
+            RelayMode::Disabled => iroh_net::relay::RelayMode::Disabled,
+            RelayMode::Default => iroh_net::relay::RelayMode::Default,
         }
     }
 }
@@ -52,7 +52,7 @@ pub fn magic_endpoint_config_free(config: MagicEndpointConfig) {
 #[ffi_export]
 pub fn magic_endpoint_config_default() -> MagicEndpointConfig {
     MagicEndpointConfig {
-        derp_mode: DerpMode::Default,
+        relay_mode: RelayMode::Default,
         alpn_protocols: vec::Vec::EMPTY,
         secret_key: secret_key_generate(),
     }
@@ -163,7 +163,7 @@ pub fn magic_endpoint_bind(
 
     TOKIO_EXECUTOR.block_on(async move {
         let builder = iroh_net::magic_endpoint::MagicEndpointBuilder::default()
-            .derp_mode(config.derp_mode.into())
+            .relay_mode(config.relay_mode.into())
             .alpns(alpn_protocols)
             .secret_key(config.secret_key.deref().into())
             .bind(port)

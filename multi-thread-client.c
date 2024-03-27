@@ -8,7 +8,7 @@
 #include "irohnet.h"
 
 int run_client(MagicEndpointConfig_t *config, slice_ref_uint8_t alpn_slice,
-               char const *node_id_raw, char const *derp_url_raw,
+               char const *node_id_raw, char const *relay_url_raw,
                char const **addrs_raw, int addrs_len) {
   printf("Starting client...\n");
 
@@ -86,7 +86,7 @@ typedef struct {
   MagicEndpoint_t *ep;
   bool json_output;     // For server
   const char *node_id;  // For client
-  const char *derp_url; // For client
+  const char *relay_url; // For client
   const char **addrs;   // For client
   int addrs_len;        // For client
 } ThreadParam;
@@ -95,7 +95,7 @@ typedef struct {
 void *client_thread_func(void *arg) {
   ThreadParam *params = (ThreadParam *)arg;
   run_client(params->config, params->alpn_slice, params->node_id,
-             params->derp_url, params->addrs, params->addrs_len);
+             params->relay_url, params->addrs, params->addrs_len);
   pthread_exit(NULL);
 }
 
@@ -129,7 +129,7 @@ int main(int argc, char const *const argv[]) {
 
   if (argc < 1) {
     fprintf(stderr,
-            "client must be supplied <node id> <derp-url> <addr1> .. <addrn>");
+            "client must be supplied <node id> <relay-url> <addr1> .. <addrn>");
     return -1;
   }
   char const *nodeAddressStr = argv[1];

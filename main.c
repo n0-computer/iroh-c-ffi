@@ -32,11 +32,11 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
     return -1;
   }
   char * node_id_str = public_key_as_base32(&my_addr.node_id);
-  char * derp_url_str = url_as_str(my_addr.derp_url);
+  char * relay_url_str = url_as_str(my_addr.relay_url);
   if (json_output) {
-    printf("{ \"type\": \"server\", \"status\": \"listening\", \"node_id\": \"%s\", \"derp\": \"%s\", \"addrs\": [", node_id_str, derp_url_str);
+    printf("{ \"type\": \"server\", \"status\": \"listening\", \"node_id\": \"%s\", \"relay\": \"%s\", \"addrs\": [", node_id_str, relay_url_str);
   } else {
-    printf("Listening on:\nNode Id: %s\nDerp: %s\nAddrs:\n", node_id_str, derp_url_str);
+    printf("Listening on:\nNode Id: %s\nRelay: %s\nAddrs:\n", node_id_str, relay_url_str);
   }
 
   // iterate over the direct addresses
@@ -170,7 +170,7 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
   free(recv_str);
   free(recv_buffer);
   recv_stream_free(recv_stream);
-  rust_free_string(derp_url_str);
+  rust_free_string(relay_url_str);
   rust_free_string(node_id_str);
   node_addr_free(my_addr);
   connection_free(conn);
@@ -184,7 +184,7 @@ run_client (
   MagicEndpointConfig_t * config,
   slice_ref_uint8_t alpn_slice,
   char const * node_id_raw,
-  char const * derp_url_raw,
+  char const * relay_url_raw,
   char const ** addrs_raw,
   int addrs_len
 )
@@ -202,14 +202,14 @@ run_client (
   // create node addr
   NodeAddr_t node_addr = node_addr_new(node_id);
 
-  // parse derp url
-  Url_t * derp_url = url_default();
-  ret = url_from_string(derp_url_raw, &derp_url);
+  // parse relay url
+  Url_t * relay_url = url_default();
+  ret = url_from_string(relay_url_raw, &relay_url);
   if (ret != 0) {
-    fprintf(stderr, "invalid derp url");
+    fprintf(stderr, "invalid relay url");
     return -1;
   }
-  node_addr_add_derp_url(&node_addr, derp_url);
+  node_addr_add_relay_url(&node_addr, relay_url);
 
   // parse direct addrs
   for (int i = 0; i < addrs_len; i++) {
@@ -345,11 +345,11 @@ main (int argc, char const * const argv[])
   // run server or client
   if (strcmp(argv[1], "client") == 0) {
     if (argc < 5) {
-      fprintf(stderr, "client must be supplied <node id> <derp-url> <addr1> .. <addrn>");
+      fprintf(stderr, "client must be supplied <node id> <relay-url> <addr1> .. <addrn>");
       return -1;
     }
     char const * node_id = argv[2];
-    char const * derp_url = argv[3];
+    char const * relay_url = argv[3];
 
     int addrs_len = argc - 4;
     char const **addrs = malloc(addrs_len * sizeof(char const*));
@@ -358,7 +358,7 @@ main (int argc, char const * const argv[])
       addrs[i] = argv[4 + i];
     }
 
-    int ret = run_client(&config, alpn_slice, node_id, derp_url, addrs, addrs_len);
+    int ret = run_client(&config, alpn_slice, node_id, relay_url, addrs, addrs_len);
     if (ret != 0) {
       return ret;
     }
