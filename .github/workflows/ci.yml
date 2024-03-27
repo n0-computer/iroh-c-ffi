@@ -79,9 +79,9 @@ jobs:
 
                 # Store variables
                 node_id=$(echo $json_output | jq -r '.node_id')
-                derp=$(echo $json_output | jq -r '.derp')
+                relay=$(echo $json_output | jq -r '.relay')
                 addrs=$(echo $json_output | jq -r '.addrs[]')
-                ./main client $node_id $derp ${addrs[@]}
+                ./main client $node_id $relay ${addrs[@]}
                 sleep 1
 
                 # Read the 3rd line of the file
@@ -193,9 +193,9 @@ jobs:
 
                 # Store variables
                 $node_id = $json_output.node_id
-                $derp = $json_output.derp
+                $relay = $json_output.relay
                 $addrs = $json_output.addrs
-                & "./main" "client" $node_id $derp $addrs
+                & "./main" "client" $node_id $relay $addrs
                 Start-Sleep -Seconds 1
 
                 # Read the 3rd line of the file

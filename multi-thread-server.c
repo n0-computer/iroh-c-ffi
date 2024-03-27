@@ -143,7 +143,7 @@ typedef struct
     MagicEndpoint_t *ep;
     bool json_output;     // For server
     const char *node_id;  // For client
-    const char *derp_url; // For client
+    const char *relay_url; // For client
     const char **addrs;   // For client
     int addrs_len;        // For client
 } ThreadParam;
@@ -203,9 +203,9 @@ int main(int argc, char const *const argv[])
         return -1;
     }
     char *node_id_str = public_key_as_base32(&my_addr.node_id);
-    char *derp_url_str = url_as_str(my_addr.derp_url);
+    char *relay_url_str = url_as_str(my_addr.relay_url);
 
-    printf("Listening on:\nNode Id: %s\nDerp: %s\nAddrs:\n", node_id_str, derp_url_str);
+    printf("Listening on:\nNode Id: %s\nRelay: %s\nAddrs:\n", node_id_str, relay_url_str);
 
     // iterate over the direct addresses
     for (int i = 0; i < my_addr.direct_addresses.len; i++)
@@ -233,7 +233,7 @@ int main(int argc, char const *const argv[])
     pthread_join(server_threads[0], NULL);
     pthread_join(server_threads[1], NULL);
 
-    rust_free_string(derp_url_str);
+    rust_free_string(relay_url_str);
     rust_free_string(node_id_str);
     node_addr_free(my_addr);
 
