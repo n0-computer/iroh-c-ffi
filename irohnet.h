@@ -65,6 +65,14 @@ enum MagicEndpointResult {
      */
     MAGIC_ENDPOINT_RESULT_CONNECT_UNI_ERROR,
     /** \brief
+     *  Failed to connect and establish a bi directional stream.
+     */
+    MAGIC_ENDPOINT_RESULT_CONNECT_BI_ERROR,
+    /** \brief
+     *  Failed to connect.
+     */
+    MAGIC_ENDPOINT_RESULT_CONNECT_ERROR,
+    /** \brief
      *  Unable to retrive node addr.
      */
     MAGIC_ENDPOINT_RESULT_ADDR_ERROR,
@@ -343,6 +351,9 @@ typedef struct MagicEndpointConfig {
 
     /** <No documentation available> */
     SecretKey_t * secret_key;
+
+    /** <No documentation available> */
+    char * peers_data_path;
 } MagicEndpointConfig_t;
 
 /** \brief
@@ -388,6 +399,14 @@ magic_endpoint_config_default (void);
 void
 magic_endpoint_config_free (
     MagicEndpointConfig_t config);
+
+/** \brief
+ *  Set the given value as the storage path for peer data.
+ */
+void
+magic_endpoint_config_set_peers_data_path (
+    MagicEndpointConfig_t * config,
+    char const * path);
 
 typedef struct {
     uint8_t idx[32];
