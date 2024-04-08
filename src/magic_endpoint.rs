@@ -5,6 +5,7 @@ use std::time::Duration;
 use anyhow::Context;
 use safer_ffi::{prelude::*, slice, vec};
 use tokio::sync::RwLock;
+use tracing::{debug, warn};
 
 use crate::addr::NodeAddr;
 use crate::key::{secret_key_generate, SecretKey};
@@ -18,6 +19,7 @@ pub struct MagicEndpointConfig {
     pub relay_mode: RelayMode,
     pub alpn_protocols: vec::Vec<vec::Vec<u8>>,
     pub secret_key: repr_c::Box<SecretKey>,
+    pub peers_data_path: Option<char_p::Box>,
 }
 
 /// The options to configure relay.
@@ -55,6 +57,7 @@ pub fn magic_endpoint_config_default() -> MagicEndpointConfig {
         relay_mode: RelayMode::Default,
         alpn_protocols: vec::Vec::EMPTY,
         secret_key: secret_key_generate(),
+        peers_data_path: None,
     }
 }
 
@@ -67,6 +70,15 @@ pub fn magic_endpoint_config_add_alpn(
     config.alpn_protocols.with_rust_mut(|alpns| {
         alpns.push(alpn.to_vec().into());
     });
+}
+
+/// Set the given value as the storage path for peer data.
+#[ffi_export]
+pub fn magic_endpoint_config_set_peers_data_path(
+    config: &mut MagicEndpointConfig,
+    path: char_p::Ref<'_>,
+) {
+    config.peers_data_path = Some(path.to_owned());
 }
 
 /// Sets the given secret key to use.
@@ -135,6 +147,10 @@ pub enum MagicEndpointResult {
     AcceptBiFailed,
     /// Failed to connect and establish a uni directional stream.
     ConnectUniError,
+    /// Failed to connect and establish a bi directional stream.
+    ConnectBiError,
+    /// Failed to connect.
+    ConnectError,
     /// Unable to retrive node addr.
     AddrError,
     /// Error while sending data.
@@ -161,20 +177,35 @@ pub fn magic_endpoint_bind(
         alpn_protocols.push(protocol.to_vec());
     }
 
+    debug!(
+        "binding with alpns: {:?}",
+        alpn_protocols
+            .iter()
+            .map(|v| std::str::from_utf8(v.as_ref()))
+            .collect::<Vec<_>>()
+    );
+
     TOKIO_EXECUTOR.block_on(async move {
-        let builder = iroh_net::magic_endpoint::MagicEndpointBuilder::default()
+        let mut builder = iroh_net::magic_endpoint::MagicEndpointBuilder::default()
             .relay_mode(config.relay_mode.into())
             .alpns(alpn_protocols)
-            .secret_key(config.secret_key.deref().into())
-            .bind(port)
-            .await;
+            .secret_key(config.secret_key.deref().into());
+
+        if let Some(ref path) = config.peers_data_path {
+            builder = builder.peers_data_path(path.to_string().into());
+        }
+
+        let builder = builder.bind(port).await;
 
         match builder {
             Ok(ep) => {
                 out.ep.write().await.replace(ep);
                 MagicEndpointResult::Ok
             }
-            Err(_err) => MagicEndpointResult::BindError,
+            Err(err) => {
+                warn!("failed to bind {:?}", err);
+                MagicEndpointResult::BindError
+            }
         }
     })
 }
@@ -206,7 +237,10 @@ pub fn connection_accept_uni(
             out.stream.replace(recv_stream);
             MagicEndpointResult::Ok
         }
-        Err(_err) => MagicEndpointResult::AcceptUniFailed,
+        Err(err) => {
+            warn!("accept uni failed: {:?}", err);
+            MagicEndpointResult::AcceptUniFailed
+        }
     }
 }
 
@@ -239,7 +273,10 @@ pub fn connection_accept_bi(
             recv.stream.replace(recv_stream);
             MagicEndpointResult::Ok
         }
-        Err(_err) => MagicEndpointResult::AcceptBiFailed,
+        Err(err) => {
+            warn!("accept bi failed: {:?}", err);
+            MagicEndpointResult::AcceptBiFailed
+        }
     }
 }
 
@@ -300,7 +337,10 @@ pub fn connection_write_datagram(
 
         match res {
             Ok(()) => MagicEndpointResult::Ok,
-            Err(_err) => MagicEndpointResult::SendError,
+            Err(err) => {
+                warn!("send datagram failed: {:?}", err);
+                MagicEndpointResult::SendError
+            }
         }
     })
 }
@@ -334,7 +374,10 @@ pub fn connection_read_datagram(
             });
             MagicEndpointResult::Ok
         }
-        Err(_err) => MagicEndpointResult::ReadError,
+        Err(err) => {
+            warn!("read failed: {:?}", err);
+            MagicEndpointResult::ReadError
+        }
     }
 }
 
@@ -374,8 +417,14 @@ pub fn connection_read_datagram_timeout(
             });
             MagicEndpointResult::Ok
         }
-        Ok(Err(_err)) => MagicEndpointResult::ReadError,
-        Err(_err) => MagicEndpointResult::Timeout,
+        Ok(Err(err)) => {
+            warn!("read failed: {:?}", err);
+            MagicEndpointResult::ReadError
+        }
+        Err(_err) => {
+            warn!("read failed timeout");
+            MagicEndpointResult::Timeout
+        }
     }
 }
 
@@ -425,7 +474,14 @@ pub fn magic_endpoint_accept(
 
     match res {
         Ok(()) => MagicEndpointResult::Ok,
-        Err(_err) => MagicEndpointResult::AcceptFailed,
+        Err(err) => {
+            warn!(
+                "accept failed: {:?}: {:?}",
+                std::str::from_utf8(expected_alpn.as_ref()),
+                err
+            );
+            MagicEndpointResult::AcceptFailed
+        }
     }
 }
 
@@ -463,7 +519,10 @@ pub fn magic_endpoint_accept_any(
 
     match res {
         Ok(()) => MagicEndpointResult::Ok,
-        Err(_err) => MagicEndpointResult::AcceptFailed,
+        Err(err) => {
+            warn!("accept failed {:?}", err);
+            MagicEndpointResult::AcceptFailed
+        }
     }
 }
 
@@ -524,7 +583,8 @@ pub fn magic_endpoint_accept_any_cb(
                     cb(ctx_ptr.0, MagicEndpointResult::Ok, alpn, conn);
                 }
             }
-            Err(_err) => unsafe {
+            Err(err) => unsafe {
+                warn!("accept failed: {:?}", err);
                 cb(
                     ctx_ptr.0,
                     MagicEndpointResult::AcceptFailed,
@@ -562,7 +622,10 @@ pub fn connection_open_uni(
             out.stream.replace(stream);
             MagicEndpointResult::Ok
         }
-        Err(_err) => MagicEndpointResult::ConnectUniError,
+        Err(err) => {
+            warn!("open uni failed: {:?}", err);
+            MagicEndpointResult::ConnectUniError
+        }
     }
 }
 
@@ -594,7 +657,10 @@ pub fn connection_open_bi(
             recv.stream.replace(recv_stream);
             MagicEndpointResult::Ok
         }
-        Err(_err) => MagicEndpointResult::ConnectUniError,
+        Err(err) => {
+            warn!("connect bi failed: {:?}", err);
+            MagicEndpointResult::ConnectBiError
+        }
     }
 }
 
@@ -625,7 +691,10 @@ pub fn magic_endpoint_connect(
 
     match res {
         Ok(()) => MagicEndpointResult::Ok,
-        Err(_err) => MagicEndpointResult::ConnectUniError,
+        Err(err) => {
+            warn!("connect failed: {:?}", err);
+            MagicEndpointResult::ConnectError
+        }
     }
 }
 
@@ -652,7 +721,10 @@ pub fn magic_endpoint_my_addr(
             *out = addr.into();
             MagicEndpointResult::Ok
         }
-        Err(_err) => MagicEndpointResult::AddrError,
+        Err(err) => {
+            warn!("failed to retrieve addr: {:?}", err);
+            MagicEndpointResult::AddrError
+        }
     }
 }
 
@@ -669,6 +741,21 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     use super::*;
+
+    #[test]
+    fn test_config() {
+        let mut config = magic_endpoint_config_default();
+        let alpn0: vec::Vec<u8> = b"/hello/world/1234".to_vec().into();
+        let alpn1: vec::Vec<u8> = b"/ha/coo/12".to_vec().into();
+
+        magic_endpoint_config_add_alpn(&mut config, alpn0.as_ref().into());
+        assert_eq!(config.alpn_protocols[0].as_ref(), alpn0.as_ref());
+        assert_eq!(config.alpn_protocols[0].as_ref().len(), 17);
+
+        magic_endpoint_config_add_alpn(&mut config, alpn1.as_ref().into());
+        assert_eq!(config.alpn_protocols[1].as_ref(), alpn1.as_ref());
+        assert_eq!(config.alpn_protocols[1].as_ref().len(), 10);
+    }
 
     #[test]
     fn stream_uni_a_b() {
