@@ -15,7 +15,7 @@ use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
 
 use crate::addr::{NodeAddr, SocketAddrV4, SocketAddrV6};
-use crate::key::{secret_key_generate, SecretKey};
+use crate::key::{secret_key_generate, PublicKey, SecretKey};
 use crate::stream::{RecvStream, SendStream};
 use crate::util::TOKIO_EXECUTOR;
 
@@ -707,6 +707,64 @@ pub fn endpoint_accept_any_cb(
                     vec::Vec::EMPTY,
                     Box::<Connection>::default().into(),
                 );
+            },
+        }
+    });
+}
+
+/// Run a callback once you have a direct connection to a peer
+///
+/// Does not block, the provided callback will be called when we have a direct
+/// connection to the peer associated with the `node_id`, or the timeout has occurred.
+///
+/// To wait indefinitely, provide -1 for the timeout parameter.
+///
+/// `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
+/// called from another thread.
+#[ffi_export]
+pub fn magic_endpoint_direct_conn_cb(
+    ep: repr_c::Box<Endpoint>,
+    ctx: *const c_void,
+    node_id: &PublicKey,
+    timeout: isize,
+    cb: unsafe extern "C" fn(ctx: *const c_void, err: EndpointResult),
+) {
+    // hack around the fact that `*const c_void` is not Send
+    struct CtxPtr(*const c_void);
+    unsafe impl Send for CtxPtr {}
+    let ctx_ptr = CtxPtr(ctx);
+
+    let node_id: NodeId = node_id.into();
+
+    TOKIO_EXECUTOR.spawn(async move {
+        // make the compiler happy
+        let _ = &ctx_ptr;
+        let timeout = if timeout == -1 {
+            None
+        } else {
+            Some(Duration::from_millis(timeout as u64))
+        };
+        async fn connect(
+            ep: repr_c::Box<Endpoint>,
+            node_id: NodeId,
+            timeout: Option<Duration>,
+        ) -> anyhow::Result<()> {
+            ep.ep
+                .read()
+                .await
+                .as_ref()
+                .expect("endpoint not initalized")
+                .wait_for_direct_connection(&node_id, timeout)
+                .await
+        }
+
+        match connect(ep, node_id, timeout).await {
+            Ok(()) => unsafe {
+                cb(ctx_ptr.0, EndpointResult::Ok);
+            },
+            Err(err) => unsafe {
+                warn!("accept failed: {:?}", err);
+                cb(ctx_ptr.0, EndpointResult::AcceptFailed);
             },
         }
     });
