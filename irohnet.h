@@ -485,6 +485,25 @@ MagicEndpoint_t *
 magic_endpoint_default (void);
 
 /** \brief
+ *  Run a callback once you have a direct connection to a peer
+ *
+ *  Does not block, the provided callback will be called when we have a direct
+ *  connection to the peer associated with the `node_id`, or the timeout has occurred.
+ *
+ *  To wait indefinitely, provide -1 for the timeout parameter.
+ *
+ *  `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
+ *  called from another thread.
+ */
+void
+magic_endpoint_direct_conn_cb (
+    MagicEndpoint_t * ep,
+    void const * ctx,
+    PublicKey_t const * node_id,
+    ssize_t timeout,
+    void (*cb)(void const *, MagicEndpointResult_t));
+
+/** \brief
  *  Frees the magic endpoint.
  */
 void
