@@ -1,5 +1,6 @@
 use std::ffi::c_void;
 use std::ops::Deref;
+use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -192,7 +193,8 @@ pub fn magic_endpoint_bind(
             .secret_key(config.secret_key.deref().into());
 
         if let Some(ref path) = config.peers_data_path {
-            builder = builder.peers_data_path(path.to_string().into());
+            let path: PathBuf = path.to_string().into();
+            builder = builder.peers_data_path(path);
         }
 
         let builder = builder.bind(port).await;

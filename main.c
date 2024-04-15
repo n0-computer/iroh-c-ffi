@@ -328,7 +328,7 @@ main (int argc, char const * const argv[])
 {
   iroh_enable_tracing();
 
-  if (argc < 2) {
+  if (argc < 3) {
     fprintf(stderr, "Usage: must supply at least client or server\n");
     return -1;
   }
@@ -342,20 +342,23 @@ main (int argc, char const * const argv[])
   MagicEndpointConfig_t config = magic_endpoint_config_default();
   magic_endpoint_config_add_alpn(&config, alpn_slice);
 
+  char const * data_path = argv[2];
+  magic_endpoint_config_set_peers_data_path(&config, data_path);
+
   // run server or client
   if (strcmp(argv[1], "client") == 0) {
-    if (argc < 5) {
-      fprintf(stderr, "client must be supplied <node id> <relay-url> <addr1> .. <addrn>");
+    if (argc < 6) {
+      fprintf(stderr, "client must be supplied <data-path> <node id> <relay-url> <addr1> .. <addrn>");
       return -1;
     }
-    char const * node_id = argv[2];
-    char const * relay_url = argv[3];
+    char const * node_id = argv[3];
+    char const * relay_url = argv[4];
 
-    int addrs_len = argc - 4;
+    int addrs_len = argc - 5;
     char const **addrs = malloc(addrs_len * sizeof(char const*));
 
     for (int i = 0; i < addrs_len; i++) {
-      addrs[i] = argv[4 + i];
+      addrs[i] = argv[5 + i];
     }
 
     int ret = run_client(&config, alpn_slice, node_id, relay_url, addrs, addrs_len);
@@ -368,7 +371,7 @@ main (int argc, char const * const argv[])
 
   } else if (strcmp(argv[1], "server") == 0) {
     bool json_output = false;
-    if (argc > 2 && strcmp(argv[2], "--json") == 0) {
+    if (argc > 3 && strcmp(argv[3], "--json") == 0) {
       json_output = true;
     }
     int ret = run_server(&config, alpn_slice, json_output);
@@ -376,7 +379,7 @@ main (int argc, char const * const argv[])
       return ret;
     }
   } else {
-    fprintf(stderr, "invalid arg: %s\n", argv[1]);
+    fprintf(stderr, "invalid arg: %s\n", argv[2]);
     return -1;
   }
 
