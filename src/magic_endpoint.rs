@@ -292,14 +292,12 @@ pub struct Connection {
 }
 
 /// Result must be freed using `connection_free`.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_default() -> repr_c::Box<Connection> {
     Box::<Connection>::default().into()
 }
 
 /// Frees the connection.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_free(conn: repr_c::Box<Connection>) {
     TOKIO_EXECUTOR.block_on(async move {
@@ -308,7 +306,6 @@ pub fn connection_free(conn: repr_c::Box<Connection>) {
 }
 
 /// Estimated roundtrip time for the current connection in milli seconds.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_rtt(conn: &repr_c::Box<Connection>) -> u64 {
     TOKIO_EXECUTOR.block_on(async move {
@@ -325,7 +322,6 @@ pub fn connection_rtt(conn: &repr_c::Box<Connection>) -> u64 {
 /// Send a single datgram (unreliably).
 ///
 /// Data must not be larger than the available `max_datagram` size.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_write_datagram(
     connection: &repr_c::Box<Connection>,
@@ -357,7 +353,6 @@ pub fn connection_write_datagram(
 /// Data must not be larger than the available `max_datagram` size.
 ///
 /// Blocks the current thread until a datagram is received.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_read_datagram(
     connection: &repr_c::Box<Connection>,
@@ -437,7 +432,6 @@ pub fn connection_read_datagram_timeout(
 }
 
 /// Returns the maximum datagram size. `0` if it is not supported.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_max_datagram_size(connection: &repr_c::Box<Connection>) -> usize {
     TOKIO_EXECUTOR.block_on(async move {
@@ -455,7 +449,6 @@ pub fn connection_max_datagram_size(connection: &repr_c::Box<Connection>) -> usi
 /// Accept a new connection on this endpoint.
 ///
 /// Blocks the current thread until a connection is established.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn magic_endpoint_accept(
     ep: &repr_c::Box<MagicEndpoint>,
@@ -500,7 +493,6 @@ pub fn magic_endpoint_accept(
 /// Does not prespecify the ALPN, and but rather returns it.
 ///
 /// Blocks the current thread until a connection is established.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn magic_endpoint_accept_any(
     ep: &repr_c::Box<MagicEndpoint>,
@@ -545,7 +537,6 @@ pub fn magic_endpoint_accept_any(
 /// when an error occurs.
 /// `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
 /// called from another thread.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn magic_endpoint_accept_any_cb(
     ep: repr_c::Box<MagicEndpoint>,
@@ -617,7 +608,6 @@ pub fn magic_endpoint_accept_any_cb(
 ///
 /// `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
 /// called from another thread.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn magic_endpoint_direct_conn_cb(
     ep: repr_c::Box<MagicEndpoint>,
@@ -725,7 +715,6 @@ impl From<iroh_net::magicsock::ConnectionType> for ConnectionType {
 ///
 /// `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
 /// called from another thread.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn magic_endpoint_conn_type_cb(
     ep: repr_c::Box<MagicEndpoint>,
@@ -806,7 +795,6 @@ pub fn magic_endpoint_conn_type_cb(
 /// Establish a uni directional connection.
 ///
 /// Blocks the current thread until the connection is established.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_open_uni(
     conn: &repr_c::Box<Connection>,
@@ -840,7 +828,6 @@ pub fn connection_open_uni(
 /// Establish a bi directional connection.
 ///
 /// Blocks the current thread until the connection is established.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_open_bi(
     conn: &repr_c::Box<Connection>,
@@ -876,7 +863,6 @@ pub fn connection_open_bi(
 /// Connects to the given node.
 ///
 /// Blocks until the connection is established.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn magic_endpoint_connect(
     ep: &repr_c::Box<MagicEndpoint>,
@@ -909,7 +895,6 @@ pub fn magic_endpoint_connect(
 }
 
 /// Get the the node dialing information of this magic endpoint.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn magic_endpoint_my_addr(
     ep: &repr_c::Box<MagicEndpoint>,
