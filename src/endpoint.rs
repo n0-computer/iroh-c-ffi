@@ -400,14 +400,12 @@ pub struct Connection {
 }
 
 /// Result must be freed using `connection_free`.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_default() -> repr_c::Box<Connection> {
     Box::<Connection>::default().into()
 }
 
 /// Frees the connection.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_free(conn: repr_c::Box<Connection>) {
     TOKIO_EXECUTOR.block_on(async move {
@@ -416,7 +414,6 @@ pub fn connection_free(conn: repr_c::Box<Connection>) {
 }
 
 /// Estimated roundtrip time for the current connection in milli seconds.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_rtt(conn: &repr_c::Box<Connection>) -> u64 {
     TOKIO_EXECUTOR.block_on(async move {
@@ -448,7 +445,6 @@ pub fn connection_packet_loss(conn: &repr_c::Box<Connection>) -> f64 {
 /// Send a single datgram (unreliably).
 ///
 /// Data must not be larger than the available `max_datagram` size.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_write_datagram(
     connection: &repr_c::Box<Connection>,
@@ -480,7 +476,6 @@ pub fn connection_write_datagram(
 /// Data must not be larger than the available `max_datagram` size.
 ///
 /// Blocks the current thread until a datagram is received.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_read_datagram(
     connection: &repr_c::Box<Connection>,
@@ -560,7 +555,6 @@ pub fn connection_read_datagram_timeout(
 }
 
 /// Returns the maximum datagram size. `0` if it is not supported.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_max_datagram_size(connection: &repr_c::Box<Connection>) -> usize {
     TOKIO_EXECUTOR.block_on(async move {
@@ -581,7 +575,6 @@ pub fn connection_max_datagram_size(connection: &repr_c::Box<Connection>) -> usi
 ///
 /// An [`EndpointResult::IncomingError`] occurring here is likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
 /// It is not considered fatal and is common to simply log and ignore.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn endpoint_accept(
     ep: &repr_c::Box<Endpoint>,
@@ -641,7 +634,6 @@ async fn accept_conn(
 ///
 /// An [`EndpointResult::IncomingError`] occurring here is likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
 /// It is not considered fatal and is common to simply log and ignore.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn endpoint_accept_any(
     ep: &repr_c::Box<Endpoint>,
@@ -677,7 +669,6 @@ pub fn endpoint_accept_any(
 ///
 /// An [`EndpointResult::IncomingError`] occurring here is likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
 /// It is not considered fatal and is common to simply log and ignore.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn endpoint_accept_any_cb(
     ep: repr_c::Box<Endpoint>,
@@ -731,7 +722,6 @@ pub fn endpoint_accept_any_cb(
 ///
 /// `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
 /// called from another thread.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn endpoint_direct_conn_cb(
     ep: repr_c::Box<Endpoint>,
@@ -837,7 +827,6 @@ impl From<iroh::endpoint::ConnectionType> for ConnectionType {
 ///
 /// `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
 /// called from another thread.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn endpoint_conn_type_cb(
     ep: repr_c::Box<Endpoint>,
@@ -906,7 +895,6 @@ pub fn endpoint_conn_type_cb(
 /// Establish a uni directional connection.
 ///
 /// Blocks the current thread until the connection is established.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_open_uni(
     conn: &repr_c::Box<Connection>,
@@ -940,7 +928,6 @@ pub fn connection_open_uni(
 /// Establish a bi directional connection.
 ///
 /// Blocks the current thread until the connection is established.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn connection_open_bi(
     conn: &repr_c::Box<Connection>,
@@ -1018,7 +1005,6 @@ pub fn connection_closed(conn: repr_c::Box<Connection>) -> EndpointResult {
 /// Connects to the given node.
 ///
 /// Blocks until the connection is established.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn endpoint_connect(
     ep: &repr_c::Box<Endpoint>,
@@ -1055,7 +1041,6 @@ pub fn endpoint_connect(
 /// to close gracefully, before shutting down the endpoint.
 ///
 /// Consumes the endpoint, no need to free it afterwards.
-#[allow(non_snake_case)]
 #[ffi_export]
 pub fn endpoint_close(ep: repr_c::Box<Endpoint>) {
     TOKIO_EXECUTOR.block_on(async move {
