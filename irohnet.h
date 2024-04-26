@@ -102,6 +102,10 @@ enum EndpointResult {
      *  It is common to simply log this error and move on.
      */
     ENDPOINT_RESULT_INCOMING_ERROR,
+    /** \brief
+     *  Unable to find connection for the given `NodeId`
+     */
+    ENDPOINT_RESULT_CONNECTION_TYPE_ERROR,
 }
 #ifndef DOXYGEN
 ; typedef uint8_t
@@ -625,25 +629,6 @@ endpoint_connect (
  */
 Endpoint_t *
 endpoint_default (void);
-
-/** \brief
- *  Run a callback once you have a direct connection to a peer
- *
- *  Does not block. The provided callback will be called when we have a direct
- *  connection to the peer associated with the `node_id`, or the timeout has occurred.
- *
- *  To wait indefinitely, provide -1 for the timeout parameter.
- *
- *  `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
- *  called from another thread.
- */
-void
-endpoint_direct_conn_cb (
-    Endpoint_t * ep,
-    void const * ctx,
-    PublicKey_t const * node_id,
-    ssize_t timeout,
-    void (*cb)(void const *, EndpointResult_t));
 
 /** \brief
  *  Frees the iroh endpoint.
