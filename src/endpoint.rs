@@ -743,12 +743,9 @@ impl From<iroh::endpoint::ConnectionType> for ConnectionType {
     }
 }
 
-/// Run a callback once you have a direct connection to a peer
+/// Run a callback each time the [`ConnectionType`] to that peer has changed.
 ///
-/// Does not block. The provided callback will be called when we have a direct
-/// connection to the peer associated with the `node_id`, or the timeout has occurred.
-///
-/// To wait indefinitely, provide -1 for the timeout parameter.
+/// Does not block. This will run until the connection has closed.
 ///
 /// `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
 /// called from another thread.
