@@ -19,7 +19,7 @@ required-features = ["headers"]  # Do not build unless generating headers.
 [dependencies]
 anyhow = "1.0.79"
 bytes = "1.5.0"
-iroh-net = "0.14"
+iroh-net = "0.15"
 once_cell = "1.19.0"
 quinn = "0.10.2"
 safer-ffi = { version = "0.1.5" }
