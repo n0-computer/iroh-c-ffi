@@ -455,7 +455,7 @@ pub fn magic_endpoint_accept(
     out: &repr_c::Box<Connection>,
 ) -> MagicEndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
-        let conn = ep
+        let mut conn = ep
             .ep
             .read()
             .await
@@ -464,9 +464,8 @@ pub fn magic_endpoint_accept(
             .accept()
             .await
             .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
-        let (_remote_node_id, alpn, connection) = iroh_net::magic_endpoint::accept_conn(conn)
-            .await
-            .context("accept_conn")?;
+        let alpn = conn.alpn().await?;
+        let connection = conn.await?;
         if alpn.as_bytes() != expected_alpn.as_slice() {
             anyhow::bail!("unexpected alpn {}", alpn);
         }
@@ -499,7 +498,7 @@ pub fn magic_endpoint_accept_any(
     out: &repr_c::Box<Connection>,
 ) -> MagicEndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
-        let conn = ep
+        let mut conn = ep
             .ep
             .read()
             .await
@@ -508,9 +507,8 @@ pub fn magic_endpoint_accept_any(
             .accept()
             .await
             .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
-        let (_remote_node_id, alpn, connection) = iroh_net::magic_endpoint::accept_conn(conn)
-            .await
-            .context("accept_conn")?;
+        let alpn = conn.alpn().await?;
+        let connection = conn.await?;
 
         alpn_out.with_rust_mut(|v| {
             *v = alpn.as_bytes().to_vec();
@@ -558,7 +556,7 @@ pub fn magic_endpoint_accept_any_cb(
         async fn connect(
             ep: repr_c::Box<MagicEndpoint>,
         ) -> anyhow::Result<(String, quinn::Connection)> {
-            let conn = ep
+            let mut conn = ep
                 .ep
                 .read()
                 .await
@@ -567,10 +565,8 @@ pub fn magic_endpoint_accept_any_cb(
                 .accept()
                 .await
                 .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
-            let (_remote_node_id, alpn, connection) = iroh_net::magic_endpoint::accept_conn(conn)
-                .await
-                .context("accept_conn")?;
-
+            let alpn = conn.alpn().await?;
+            let connection = conn.await?;
             Ok((alpn, connection))
         }
 
