@@ -4,12 +4,13 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::Context;
+use futures_lite::StreamExt;
 use safer_ffi::{prelude::*, slice, vec};
 use tokio::sync::RwLock;
 use tracing::{debug, warn};
 
 use crate::addr::NodeAddr;
-use crate::key::{secret_key_generate, SecretKey};
+use crate::key::{secret_key_generate, PublicKey, SecretKey};
 use crate::stream::{RecvStream, SendStream};
 use crate::util::TOKIO_EXECUTOR;
 
@@ -594,6 +595,117 @@ pub fn magic_endpoint_accept_any_cb(
     });
 }
 
+#[derive_ReprC]
+#[repr(u8)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum ConnectionType {
+    /// Direct UDP connection
+    Direct = 0,
+    /// Relay connection over relay
+    Relay,
+    /// Both a UDP and a relay connection are used.
+    ///
+    /// This is the case if we do have a UDP address, but are missing a recent confirmation that
+    /// the address works.
+    Mixed,
+    /// We have no verified connection to this PublicKey
+    None,
+}
+
+impl From<iroh_net::magicsock::ConnectionType> for ConnectionType {
+    fn from(value: iroh_net::magicsock::ConnectionType) -> Self {
+        match value {
+            iroh_net::magicsock::ConnectionType::Direct(_) => ConnectionType::Direct,
+            iroh_net::magicsock::ConnectionType::Relay(_) => ConnectionType::Relay,
+            iroh_net::magicsock::ConnectionType::Mixed(_, _) => ConnectionType::Mixed,
+            iroh_net::magicsock::ConnectionType::None => ConnectionType::None,
+        }
+    }
+}
+
+/// Run a callback each time the [`ConnectionType`] to that peer has changed.
+///
+/// Does not block. This will run until the connection has closed.
+///
+/// `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
+/// called from another thread.
+#[ffi_export]
+pub fn magic_endpoint_conn_type_cb(
+    ep: repr_c::Box<MagicEndpoint>,
+    ctx: *const c_void,
+    node_id: &PublicKey,
+    cb: unsafe extern "C" fn(
+        ctx: *const c_void,
+        err: MagicEndpointResult,
+        conn_type: ConnectionType,
+    ),
+) {
+    // hack around the fact that `*const c_void` is not Send
+    struct CtxPtr(*const c_void);
+    unsafe impl Send for CtxPtr {}
+    let ctx_ptr = CtxPtr(ctx);
+
+    let node_id: iroh_net::key::PublicKey = node_id.into();
+
+    TOKIO_EXECUTOR.spawn(async move {
+        // make the compiler happy
+        let _ = &ctx_ptr;
+
+        let res = ep
+            .ep
+            .read()
+            .await
+            .as_ref()
+            .expect("endpoint not initalized")
+            .add_node_addr(iroh_net::NodeAddr::new(node_id));
+        if res.is_err() {
+            unsafe {
+                cb(
+                    ctx_ptr.0,
+                    MagicEndpointResult::AddrError,
+                    ConnectionType::None,
+                );
+            }
+            return;
+        }
+
+        let mut stream = match ep
+            .ep
+            .read()
+            .await
+            .as_ref()
+            .expect("endpoint not initalized")
+            .conn_type_stream(&node_id)
+        {
+            Err(_) => {
+                unsafe {
+                    cb(
+                        ctx_ptr.0,
+                        MagicEndpointResult::AddrError,
+                        ConnectionType::None,
+                    );
+                }
+                return;
+            }
+            Ok(stream) => stream,
+        };
+
+        while let Some(conn_type) = stream.next().await {
+            unsafe {
+                cb(ctx_ptr.0, MagicEndpointResult::Ok, conn_type.into());
+            }
+        }
+
+        unsafe {
+            cb(
+                ctx_ptr.0,
+                MagicEndpointResult::ConnectError,
+                ConnectionType::None,
+            );
+        }
+    });
+}
+
 /// Establish a uni directional connection.
 ///
 /// Blocks the current thread until the connection is established.
@@ -746,11 +858,11 @@ mod tests {
         let alpn0: vec::Vec<u8> = b"/hello/world/1234".to_vec().into();
         let alpn1: vec::Vec<u8> = b"/ha/coo/12".to_vec().into();
 
-        magic_endpoint_config_add_alpn(&mut config, alpn0.as_ref().into());
+        magic_endpoint_config_add_alpn(&mut config, alpn0.as_ref());
         assert_eq!(config.alpn_protocols[0].as_ref(), alpn0.as_ref());
         assert_eq!(config.alpn_protocols[0].as_ref().len(), 17);
 
-        magic_endpoint_config_add_alpn(&mut config, alpn1.as_ref().into());
+        magic_endpoint_config_add_alpn(&mut config, alpn1.as_ref());
         assert_eq!(config.alpn_protocols[1].as_ref(), alpn1.as_ref());
         assert_eq!(config.alpn_protocols[1].as_ref().len(), 10);
     }
@@ -760,10 +872,10 @@ mod tests {
         let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
         // create config
         let mut config_server = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
+        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref());
 
         let mut config_client = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
+        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref());
 
         let (s, r) = std::sync::mpsc::channel();
 
@@ -771,8 +883,8 @@ mod tests {
         let alpn_s = alpn.clone();
         let server_thread = std::thread::spawn(move || {
             // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_server, 0, &mut ep);
+            let ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_server, 0, &ep);
             assert_eq!(bind_res, MagicEndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
@@ -783,8 +895,8 @@ mod tests {
 
             // accept connection
             println!("[s] accepting conn");
-            let mut conn = connection_default();
-            let accept_res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            let conn = connection_default();
+            let accept_res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &conn);
             assert_eq!(accept_res, MagicEndpointResult::Ok);
 
             let mut recv_stream = recv_stream_default();
@@ -805,8 +917,8 @@ mod tests {
         // setup client
         let client_thread = std::thread::spawn(move || {
             // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_client, 0, &mut ep);
+            let ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_client, 0, &ep);
             assert_eq!(bind_res, MagicEndpointResult::Ok);
 
             // wait for addr from server
@@ -814,8 +926,8 @@ mod tests {
 
             println!("[c] dialing");
             // connect to server
-            let mut conn = connection_default();
-            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+            let conn = connection_default();
+            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &conn);
             assert_eq!(connect_res, MagicEndpointResult::Ok);
 
             let mut send_stream = send_stream_default();
@@ -839,10 +951,10 @@ mod tests {
         let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
         // create config
         let mut config_server = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
+        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref());
 
         let mut config_client = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
+        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref());
 
         let (s, r) = std::sync::mpsc::channel();
 
@@ -850,8 +962,8 @@ mod tests {
         let alpn_s = alpn.clone();
         let server_thread = std::thread::spawn(move || {
             // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_server, 0, &mut ep);
+            let ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_server, 0, &ep);
             assert_eq!(bind_res, MagicEndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
@@ -862,8 +974,8 @@ mod tests {
 
             // accept connection
             println!("[s] accepting conn");
-            let mut conn = connection_default();
-            let accept_res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            let conn = connection_default();
+            let accept_res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &conn);
             assert_eq!(accept_res, MagicEndpointResult::Ok);
 
             println!("[s] opening uni");
@@ -883,8 +995,8 @@ mod tests {
         // setup client
         let client_thread = std::thread::spawn(move || {
             // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_client, 0, &mut ep);
+            let ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_client, 0, &ep);
             assert_eq!(bind_res, MagicEndpointResult::Ok);
 
             // wait for addr from server
@@ -892,8 +1004,8 @@ mod tests {
 
             println!("[c] dialing");
             // connect to server
-            let mut conn = connection_default();
-            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+            let conn = connection_default();
+            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &conn);
             assert_eq!(connect_res, MagicEndpointResult::Ok);
 
             println!("[c] accepting uni");
@@ -920,10 +1032,10 @@ mod tests {
         let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
         // create config
         let mut config_server = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
+        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref());
 
         let mut config_client = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
+        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref());
 
         let (s, r) = std::sync::mpsc::channel();
         let (server_s, server_r) = std::sync::mpsc::channel();
@@ -932,8 +1044,8 @@ mod tests {
         let alpn_s = alpn.clone();
         let server_thread = std::thread::spawn(move || {
             // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_server, 0, &mut ep);
+            let ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_server, 0, &ep);
             assert_eq!(bind_res, MagicEndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
@@ -944,8 +1056,8 @@ mod tests {
 
             // accept connection
             println!("[s] accepting conn");
-            let mut conn = connection_default();
-            let accept_res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            let conn = connection_default();
+            let accept_res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &conn);
             assert_eq!(accept_res, MagicEndpointResult::Ok);
 
             println!("[s] reading");
@@ -960,8 +1072,8 @@ mod tests {
         // setup client
         let client_thread = std::thread::spawn(move || {
             // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_client, 0, &mut ep);
+            let ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_client, 0, &ep);
             assert_eq!(bind_res, MagicEndpointResult::Ok);
 
             // wait for addr from server
@@ -969,15 +1081,15 @@ mod tests {
 
             println!("[c] dialing");
             // connect to server
-            let mut conn = connection_default();
-            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+            let conn = connection_default();
+            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &conn);
             assert_eq!(connect_res, MagicEndpointResult::Ok);
 
             println!("[c] sending");
             let max_datagram = connection_max_datagram_size(&conn);
             assert!(max_datagram > 0);
             dbg!(max_datagram);
-            let send_res = connection_write_datagram(&mut conn, b"hello world"[..].into());
+            let send_res = connection_write_datagram(&conn, b"hello world"[..].into());
             assert_eq!(send_res, MagicEndpointResult::Ok);
 
             // wait for the server to have received
@@ -993,10 +1105,10 @@ mod tests {
         let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
         // create config
         let mut config_server = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
+        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref());
 
         let mut config_client = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
+        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref());
 
         let (s, r) = std::sync::mpsc::channel();
         let (client_s, client_r) = std::sync::mpsc::channel();
@@ -1005,8 +1117,8 @@ mod tests {
         let alpn_s = alpn.clone();
         let server_thread = std::thread::spawn(move || {
             // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_server, 0, &mut ep);
+            let ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_server, 0, &ep);
             assert_eq!(bind_res, MagicEndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
@@ -1017,8 +1129,8 @@ mod tests {
 
             // accept connection
             println!("[s] accepting conn");
-            let mut conn = connection_default();
-            let res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            let conn = connection_default();
+            let res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &conn);
             assert_eq!(res, MagicEndpointResult::Ok);
 
             let mut send_stream = send_stream_default();
@@ -1048,8 +1160,8 @@ mod tests {
         // setup client
         let client_thread = std::thread::spawn(move || {
             // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_client, 0, &mut ep);
+            let ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_client, 0, &ep);
             assert_eq!(bind_res, MagicEndpointResult::Ok);
 
             // wait for addr from server
@@ -1057,8 +1169,8 @@ mod tests {
 
             println!("[c] dialing");
             // connect to server
-            let mut conn = connection_default();
-            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+            let conn = connection_default();
+            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &conn);
             assert_eq!(connect_res, MagicEndpointResult::Ok);
 
             let mut send_stream = send_stream_default();
@@ -1096,12 +1208,12 @@ mod tests {
 
         // create config
         let mut config_server = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_server, alpn1.as_ref().into());
-        magic_endpoint_config_add_alpn(&mut config_server, alpn2.as_ref().into());
+        magic_endpoint_config_add_alpn(&mut config_server, alpn1.as_ref());
+        magic_endpoint_config_add_alpn(&mut config_server, alpn2.as_ref());
 
         let mut config_client = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_client, alpn1.as_ref().into());
-        magic_endpoint_config_add_alpn(&mut config_client, alpn2.as_ref().into());
+        magic_endpoint_config_add_alpn(&mut config_client, alpn1.as_ref());
+        magic_endpoint_config_add_alpn(&mut config_client, alpn2.as_ref());
 
         let (s, r) = std::sync::mpsc::channel();
         let (client1_s, client1_r) = std::sync::mpsc::channel();
@@ -1134,9 +1246,9 @@ mod tests {
                 handles.push(std::thread::spawn(move || {
                     // accept connection
                     println!("[s][{i}] accepting conn");
-                    let mut conn = connection_default();
+                    let conn = connection_default();
                     let mut alpn = vec::Vec::EMPTY;
-                    let res = magic_endpoint_accept_any(&ep, &mut alpn, &mut conn);
+                    let res = magic_endpoint_accept_any(&ep, &mut alpn, &conn);
                     assert_eq!(res, MagicEndpointResult::Ok);
 
                     let (j, client_r) = if alpn.as_ref() == alpn1_s.as_ref() {
@@ -1208,10 +1320,9 @@ mod tests {
 
                     println!("[c][{i}] dialing");
                     // connect to server
-                    let mut conn = connection_default();
+                    let conn = connection_default();
                     let alpn = if i == 0 { alpn1 } else { alpn2 };
-                    let connect_res =
-                        magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+                    let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &conn);
                     assert_eq!(connect_res, MagicEndpointResult::Ok);
 
                     let mut send_stream = send_stream_default();
@@ -1250,5 +1361,163 @@ mod tests {
 
         server_thread.join().unwrap();
         client_thread.join().unwrap();
+    }
+
+    unsafe extern "C" fn direct_conn_callback(ctx: *const c_void, res: MagicEndpointResult) {
+        // unsafe b/c dereferencing a raw pointer
+        let sender: &tokio::sync::mpsc::Sender<MagicEndpointResult> =
+            unsafe { &(*(ctx as *const tokio::sync::mpsc::Sender<MagicEndpointResult>)) };
+        sender
+            .try_send(res)
+            .expect("receiver dropped or channel full");
+    }
+
+    type CallbackRes = (MagicEndpointResult, ConnectionType);
+
+    unsafe extern "C" fn conn_type_callback(
+        ctx: *const c_void,
+        res: MagicEndpointResult,
+        conn_type: ConnectionType,
+    ) {
+        // unsafe b/c dereferencing a raw pointer
+        let sender: &tokio::sync::mpsc::Sender<CallbackRes> =
+            unsafe { &(*(ctx as *const tokio::sync::mpsc::Sender<CallbackRes>)) };
+        sender
+            .try_send((res, conn_type))
+            .expect("receiver dropped or channel full");
+    }
+
+    #[test]
+    fn test_conn_type_cb() {
+        let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
+
+        // create config
+        let mut config_server = magic_endpoint_config_default();
+        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref());
+
+        let mut config_client = magic_endpoint_config_default();
+        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref());
+
+        let (s, r) = std::sync::mpsc::channel();
+        let (client_s, client_r) = std::sync::mpsc::channel();
+
+        // setup server
+        let alpn_s = alpn.clone();
+        let server_thread = std::thread::spawn(move || {
+            // create magic endpoint and bind
+            let ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_server, 0, &ep);
+            assert_eq!(bind_res, MagicEndpointResult::Ok);
+
+            let mut node_addr = node_addr_default();
+            let res = magic_endpoint_my_addr(&ep, &mut node_addr);
+            assert_eq!(res, MagicEndpointResult::Ok);
+
+            s.send(node_addr).unwrap();
+
+            let ep = Arc::new(ep);
+            let alpn_s = alpn_s.clone();
+
+            // accept connection
+            println!("[s] accepting conn");
+            let conn = connection_default();
+            let mut alpn = vec::Vec::EMPTY;
+            let res = magic_endpoint_accept_any(&ep, &mut alpn, &conn);
+            assert_eq!(res, MagicEndpointResult::Ok);
+
+            if alpn.as_ref() != alpn_s.as_ref() {
+                panic!("unexpectd alpn: {:?}", alpn);
+            };
+
+            let mut send_stream = send_stream_default();
+            let mut recv_stream = recv_stream_default();
+            let accept_res = connection_accept_bi(&conn, &mut send_stream, &mut recv_stream);
+            assert_eq!(accept_res, MagicEndpointResult::Ok);
+
+            println!("[s] reading");
+
+            let mut recv_buffer = vec![0u8; 1024];
+            let read_res = recv_stream_read(&mut recv_stream, (&mut recv_buffer[..]).into());
+            assert!(read_res > 0);
+            assert_eq!(
+                std::str::from_utf8(&recv_buffer[..read_res as usize]).unwrap(),
+                "hello world",
+            );
+
+            println!("[s] sending");
+            let send_res = send_stream_write(&mut send_stream, "hello client".as_bytes().into());
+            assert_eq!(send_res, MagicEndpointResult::Ok);
+
+            let res = send_stream_finish(send_stream);
+            assert_eq!(res, MagicEndpointResult::Ok);
+            client_r.recv().unwrap();
+        });
+
+        let (callback_s, mut callback_r): (
+            tokio::sync::mpsc::Sender<CallbackRes>,
+            tokio::sync::mpsc::Receiver<CallbackRes>,
+        ) = tokio::sync::mpsc::channel(10);
+
+        // setup client
+        let client_thread = std::thread::spawn(move || {
+            // create magic endpoint and bind
+            let ep = magic_endpoint_default();
+            let bind_res = magic_endpoint_bind(&config_client, 0, &ep);
+            assert_eq!(bind_res, MagicEndpointResult::Ok);
+
+            // wait for addr from server
+            let node_addr = r.recv().unwrap();
+
+            let alpn = alpn.clone();
+
+            // wait for a moment to make sure the server is ready
+            std::thread::sleep(std::time::Duration::from_millis(100));
+
+            println!("[c] dialing");
+            // connect to server
+            let conn = connection_default();
+            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr.clone(), &conn);
+            assert_eq!(connect_res, MagicEndpointResult::Ok);
+
+            let mut send_stream = send_stream_default();
+            let mut recv_stream = recv_stream_default();
+            let open_res = connection_open_bi(&conn, &mut send_stream, &mut recv_stream);
+            assert_eq!(open_res, MagicEndpointResult::Ok);
+
+            let s_ptr: *const c_void = &callback_s as *const _ as *const c_void;
+            magic_endpoint_conn_type_cb(ep, s_ptr, &node_addr.node_id, conn_type_callback);
+
+            println!("[c] sending");
+            let send_res = send_stream_write(&mut send_stream, "hello world".as_bytes().into());
+            assert_eq!(send_res, MagicEndpointResult::Ok);
+
+            println!("[c] reading");
+
+            let mut recv_buffer = vec![0u8; 1024];
+            let read_res = recv_stream_read(&mut recv_stream, (&mut recv_buffer[..]).into());
+            assert!(read_res > 0);
+            assert_eq!(
+                std::str::from_utf8(&recv_buffer[..read_res as usize]).unwrap(),
+                "hello client"
+            );
+
+            let finish_res = send_stream_finish(send_stream);
+            assert_eq!(finish_res, MagicEndpointResult::Ok);
+            client_s.send(()).unwrap();
+        });
+
+        server_thread.join().unwrap();
+        client_thread.join().unwrap();
+        let mut got_any_res = false;
+        while let Some((res, conn_type)) = callback_r.blocking_recv() {
+            got_any_res = true;
+            if !matches!(res, MagicEndpointResult::Ok) {
+                panic!("got error in conn type callback: {res:?}");
+            }
+            println!("got conn type {conn_type:?}");
+        }
+        if !got_any_res {
+            panic!("got no messages from the callback");
+        }
     }
 }
