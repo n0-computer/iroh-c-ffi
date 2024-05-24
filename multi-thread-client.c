@@ -7,7 +7,7 @@
 
 #include "irohnet.h"
 
-int run_client(MagicEndpointConfig_t *config, slice_ref_uint8_t alpn_slice,
+int run_client(EndpointConfig_t *config, slice_ref_uint8_t alpn_slice,
                char const *node_id_raw, char const *relay_url_raw,
                char const **addrs_raw, int addrs_len) {
   printf("Starting client...\n");
@@ -22,9 +22,9 @@ int run_client(MagicEndpointConfig_t *config, slice_ref_uint8_t alpn_slice,
     return -1;
   }
 
-  printf("binding magic endpoint\n");
-  MagicEndpoint_t *ep = magic_endpoint_default();
-  int bind_res = magic_endpoint_bind(config, 0, &ep);
+  printf("binding iroh endpoint\n");
+  Endpoint_t *ep = endpoint_default();
+  int bind_res = endpoint_bind(config, 0, &ep);
   if (bind_res != 0) {
     fprintf(stderr, "failed to bind\n");
     return -1;
@@ -33,7 +33,7 @@ int run_client(MagicEndpointConfig_t *config, slice_ref_uint8_t alpn_slice,
   // connect
   printf("connecting to %s\n", alpn_slice.ptr);
   Connection_t *conn = connection_default();
-  int ret = magic_endpoint_connect(&ep, alpn_slice, node_addr, &conn);
+  int ret = endpoint_connect(&ep, alpn_slice, node_addr, &conn);
   if (ret != 0) {
     printf("failed to connect to server\n");
     return -1;
@@ -64,7 +64,7 @@ int run_client(MagicEndpointConfig_t *config, slice_ref_uint8_t alpn_slice,
   printf("reading to end\n");
   Vec_uint8_t recvBuffer = rust_buffer_alloc(0);
   err = recv_stream_read_to_end_timeout(&recv_stream, &recvBuffer, 1024, 5000);
-  if (err == MAGIC_ENDPOINT_RESULT_TIMEOUT) {
+  if (err == ENDPOINT_RESULT_TIMEOUT) {
     printf("Response timed out\n");
     return 1;
   } else if (err != 0) {
@@ -81,9 +81,9 @@ int run_client(MagicEndpointConfig_t *config, slice_ref_uint8_t alpn_slice,
 }
 // Define a structure to pass multiple parameters to the pthread functions
 typedef struct {
-  MagicEndpointConfig_t *config;
+  EndpointConfig_t *config;
   slice_ref_uint8_t alpn_slice;
-  MagicEndpoint_t *ep;
+  Endpoint_t *ep;
   bool json_output;     // For server
   const char *node_id;  // For client
   const char *relay_url; // For client
@@ -115,16 +115,16 @@ int main(int argc, char const *const argv[]) {
   client_params[0].alpn_slice.ptr = (uint8_t *)&alpn1[0];
   client_params[0].alpn_slice.len = strlen(alpn1);
   client_params[0].json_output = false; // Or true, based on your requirement
-  MagicEndpointConfig_t config = magic_endpoint_config_default();
-  magic_endpoint_config_add_alpn(&config, client_params[0].alpn_slice);
+  EndpointConfig_t config = endpoint_config_default();
+  endpoint_config_add_alpn(&config, client_params[0].alpn_slice);
   client_params[0].config = &config;
 
   // Server thread 2 with different ALPN
   client_params[1].alpn_slice.ptr = (uint8_t *)&alpn2[0];
   client_params[1].alpn_slice.len = strlen(alpn2);
   client_params[1].json_output = false; // Or true
-  MagicEndpointConfig_t config2 = magic_endpoint_config_default();
-  magic_endpoint_config_add_alpn(&config2, client_params[1].alpn_slice);
+  EndpointConfig_t config2 = endpoint_config_default();
+  endpoint_config_add_alpn(&config2, client_params[1].alpn_slice);
   client_params[1].config = &config2;
 
   if (argc < 1) {

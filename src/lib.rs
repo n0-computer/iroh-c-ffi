@@ -1,6 +1,6 @@
 pub mod addr;
+pub mod endpoint;
 pub mod key;
-pub mod magic_endpoint;
 pub mod stream;
 pub mod util;
 

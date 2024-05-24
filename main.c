@@ -8,7 +8,7 @@
 #include "irohnet.h"
 
 int
-run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_output)
+run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_output)
 {
   if (json_output) {
     printf("{ \"type\": \"server\", \"status\": \"starting\" }\n");
@@ -17,8 +17,8 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
   }
 
   // Bind
-  MagicEndpoint_t * ep = magic_endpoint_default();
-  int bind_res = magic_endpoint_bind(config, 0, &ep);
+  Endpoint_t * ep = endpoint_default();
+  int bind_res = endpoint_bind(config, 0, &ep);
   if (bind_res != 0) {
     fprintf(stderr, "failed to bind server\n");
     return -1;
@@ -26,7 +26,7 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
 
   // Print details
   NodeAddr_t my_addr = node_addr_default();
-  int addr_res = magic_endpoint_my_addr(&ep, &my_addr);
+  int addr_res = endpoint_my_addr(&ep, &my_addr);
   if (addr_res != 0) {
     fprintf(stderr, "failed to get my address");
     return -1;
@@ -62,7 +62,7 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
 
   // Accept connections
   Connection_t * conn = connection_default();
-  int res = magic_endpoint_accept(&ep, alpn_slice, &conn);
+  int res = endpoint_accept(&ep, alpn_slice, &conn);
   if (res != 0) {
     fprintf(stderr, "failed to accept connection");
     return -1;
@@ -174,14 +174,14 @@ run_server (MagicEndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool j
   rust_free_string(node_id_str);
   node_addr_free(my_addr);
   connection_free(conn);
-  magic_endpoint_free(ep);
+  endpoint_free(ep);
 
   return 0;
 }
 
 int
 run_client (
-  MagicEndpointConfig_t * config,
+  EndpointConfig_t * config,
   slice_ref_uint8_t alpn_slice,
   char const * node_id_raw,
   char const * relay_url_raw,
@@ -223,8 +223,8 @@ run_client (
   }
 
   // setup endpoint
-  MagicEndpoint_t * ep = magic_endpoint_default();
-  int bind_res = magic_endpoint_bind(config, 0, &ep);
+  Endpoint_t * ep = endpoint_default();
+  int bind_res = endpoint_bind(config, 0, &ep);
   if (bind_res != 0) {
     fprintf(stderr, "failed to bind\n");
     return -1;
@@ -232,7 +232,7 @@ run_client (
 
   // connect
   Connection_t * conn = connection_default();
-  ret = magic_endpoint_connect(&ep, alpn_slice, node_addr, &conn);
+  ret = endpoint_connect(&ep, alpn_slice, node_addr, &conn);
   if (ret != 0) {
     fprintf(stderr, "failed to connect to server\n");
     return -1;
@@ -333,17 +333,17 @@ main (int argc, char const * const argv[])
     return -1;
   }
 
-  // setup magic endpoint configuration
+  // setup iroh endpoint configuration
   char alpn[] = "/cool/alpn/1";
   slice_ref_uint8_t alpn_slice;
   alpn_slice.ptr = (uint8_t *) &alpn[0];
   alpn_slice.len = strlen(alpn);
 
-  MagicEndpointConfig_t config = magic_endpoint_config_default();
-  magic_endpoint_config_add_alpn(&config, alpn_slice);
+  EndpointConfig_t config = endpoint_config_default();
+  endpoint_config_add_alpn(&config, alpn_slice);
 
   char const * data_path = argv[2];
-  magic_endpoint_config_set_peers_data_path(&config, data_path);
+  endpoint_config_set_peers_data_path(&config, data_path);
 
   // run server or client
   if (strcmp(argv[1], "client") == 0) {
@@ -384,7 +384,7 @@ main (int argc, char const * const argv[])
   }
 
   // cleanup
-  magic_endpoint_config_free(config);
+  endpoint_config_free(config);
 
   return EXIT_SUCCESS;
 }

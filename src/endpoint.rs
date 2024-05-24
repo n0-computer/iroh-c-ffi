@@ -13,10 +13,10 @@ use crate::key::{secret_key_generate, SecretKey};
 use crate::stream::{RecvStream, SendStream};
 use crate::util::TOKIO_EXECUTOR;
 
-/// Configuration options for the MagicEndpoint.
+/// Configuration options for the Endpoint.
 #[derive_ReprC]
 #[repr(C)]
-pub struct MagicEndpointConfig {
+pub struct EndpointConfig {
     pub relay_mode: RelayMode,
     pub alpn_protocols: vec::Vec<vec::Vec<u8>>,
     pub secret_key: repr_c::Box<SecretKey>,
@@ -43,18 +43,18 @@ impl From<RelayMode> for iroh_net::relay::RelayMode {
     }
 }
 
-/// Frees the magic endpoint config.
+/// Frees the iroh endpoint config.
 #[ffi_export]
-pub fn magic_endpoint_config_free(config: MagicEndpointConfig) {
+pub fn endpoint_config_free(config: EndpointConfig) {
     drop(config);
 }
 
-/// Generate a default magic endpoint configuration.
+/// Generate a default endpoint configuration.
 ///
-/// Must be freed using `magic_endpoing_config_free`.
+/// Must be freed using `endpoint_config_free`.
 #[ffi_export]
-pub fn magic_endpoint_config_default() -> MagicEndpointConfig {
-    MagicEndpointConfig {
+pub fn endpoint_config_default() -> EndpointConfig {
+    EndpointConfig {
         relay_mode: RelayMode::Default,
         alpn_protocols: vec::Vec::EMPTY,
         secret_key: secret_key_generate(),
@@ -64,10 +64,7 @@ pub fn magic_endpoint_config_default() -> MagicEndpointConfig {
 
 /// Add the given ALPN to the list of accepted ALPNs.
 #[ffi_export]
-pub fn magic_endpoint_config_add_alpn(
-    config: &mut MagicEndpointConfig,
-    alpn: slice::slice_ref<'_, u8>,
-) {
+pub fn endpoint_config_add_alpn(config: &mut EndpointConfig, alpn: slice::slice_ref<'_, u8>) {
     config.alpn_protocols.with_rust_mut(|alpns| {
         alpns.push(alpn.to_vec().into());
     });
@@ -75,17 +72,14 @@ pub fn magic_endpoint_config_add_alpn(
 
 /// Set the given value as the storage path for peer data.
 #[ffi_export]
-pub fn magic_endpoint_config_set_peers_data_path(
-    config: &mut MagicEndpointConfig,
-    path: char_p::Ref<'_>,
-) {
+pub fn endpoint_config_set_peers_data_path(config: &mut EndpointConfig, path: char_p::Ref<'_>) {
     config.peers_data_path = Some(path.to_owned());
 }
 
 /// Sets the given secret key to use.
 #[ffi_export]
-pub fn magic_endpoint_config_add_secret_key(
-    config: &mut MagicEndpointConfig,
+pub fn endpoint_config_add_secret_key(
+    config: &mut EndpointConfig,
     secret_key: repr_c::Box<SecretKey>,
 ) {
     config.secret_key = secret_key;
@@ -93,15 +87,15 @@ pub fn magic_endpoint_config_add_secret_key(
 
 /// Generate a default endpoint.
 ///
-/// Must be freed using `magic_endpoint_free`.
+/// Must be freed using `endpoint_free`.
 #[ffi_export]
-pub fn magic_endpoint_default() -> repr_c::Box<MagicEndpoint> {
-    Box::new(MagicEndpoint { ep: None.into() }).into()
+pub fn endpoint_default() -> repr_c::Box<Endpoint> {
+    Box::new(Endpoint { ep: None.into() }).into()
 }
 
-/// Frees the magic endpoint.
+/// Frees the iroh endpoint.
 #[ffi_export]
-pub fn magic_endpoint_free(ep: repr_c::Box<MagicEndpoint>) {
+pub fn endpoint_free(ep: repr_c::Box<Endpoint>) {
     TOKIO_EXECUTOR.block_on(async move {
         let _ = ep.ep.write().await.take();
     });
@@ -112,7 +106,7 @@ pub fn magic_endpoint_free(ep: repr_c::Box<MagicEndpoint>) {
 /// This really only needs to be called on android,
 /// Ref https://developer.android.com/training/monitoring-device-state/connectivity-status-type
 #[ffi_export]
-pub fn magic_endpoint_network_change(ep: &repr_c::Box<MagicEndpoint>) {
+pub fn endpoint_network_change(ep: &repr_c::Box<Endpoint>) {
     TOKIO_EXECUTOR.block_on(async move {
         ep.ep
             .read()
@@ -124,18 +118,18 @@ pub fn magic_endpoint_network_change(ep: &repr_c::Box<MagicEndpoint>) {
     });
 }
 
-/// An endpoint that leverages a quic endpoint, backed by a magic socket.
+/// An endpoint that leverages a quic endpoint, backed by a iroh socket.
 #[derive_ReprC]
 #[repr(opaque)]
-pub struct MagicEndpoint {
-    ep: RwLock<Option<iroh_net::magic_endpoint::MagicEndpoint>>,
+pub struct Endpoint {
+    ep: RwLock<Option<iroh_net::endpoint::Endpoint>>,
 }
 
-/// Result of dealing with a magic endpoint.
+/// Result of dealing with a iroh endpoint.
 #[derive_ReprC]
 #[repr(u8)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum MagicEndpointResult {
+pub enum EndpointResult {
     /// Everything is ok
     Ok = 0,
     /// Failed to bind.
@@ -168,11 +162,11 @@ pub enum MagicEndpointResult {
 ///
 /// Blocks the current thread.
 #[ffi_export]
-pub fn magic_endpoint_bind(
-    config: &MagicEndpointConfig,
+pub fn endpoint_bind(
+    config: &EndpointConfig,
     port: u16,
-    out: &repr_c::Box<MagicEndpoint>,
-) -> MagicEndpointResult {
+    out: &repr_c::Box<Endpoint>,
+) -> EndpointResult {
     let mut alpn_protocols = Vec::with_capacity(config.alpn_protocols.len());
     for protocol in config.alpn_protocols.iter() {
         alpn_protocols.push(protocol.to_vec());
@@ -187,7 +181,7 @@ pub fn magic_endpoint_bind(
     );
 
     TOKIO_EXECUTOR.block_on(async move {
-        let mut builder = iroh_net::magic_endpoint::MagicEndpointBuilder::default()
+        let mut builder = iroh_net::endpoint::Builder::default()
             .relay_mode(config.relay_mode.into())
             .alpns(alpn_protocols)
             .secret_key(config.secret_key.deref().into());
@@ -202,11 +196,11 @@ pub fn magic_endpoint_bind(
         match builder {
             Ok(ep) => {
                 out.ep.write().await.replace(ep);
-                MagicEndpointResult::Ok
+                EndpointResult::Ok
             }
             Err(err) => {
                 warn!("failed to bind {:?}", err);
-                MagicEndpointResult::BindError
+                EndpointResult::BindError
             }
         }
     })
@@ -219,7 +213,7 @@ pub fn magic_endpoint_bind(
 pub fn connection_accept_uni(
     conn: &repr_c::Box<Connection>,
     out: &mut repr_c::Box<RecvStream>,
-) -> MagicEndpointResult {
+) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         let recv_stream = conn
             .connection
@@ -237,11 +231,11 @@ pub fn connection_accept_uni(
     match res {
         Ok(recv_stream) => {
             out.stream.replace(recv_stream);
-            MagicEndpointResult::Ok
+            EndpointResult::Ok
         }
         Err(err) => {
             warn!("accept uni failed: {:?}", err);
-            MagicEndpointResult::AcceptUniFailed
+            EndpointResult::AcceptUniFailed
         }
     }
 }
@@ -254,7 +248,7 @@ pub fn connection_accept_bi(
     conn: &repr_c::Box<Connection>,
     send: &mut repr_c::Box<SendStream>,
     recv: &mut repr_c::Box<RecvStream>,
-) -> MagicEndpointResult {
+) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         let (send_stream, recv_stream) = conn
             .connection
@@ -273,11 +267,11 @@ pub fn connection_accept_bi(
         Ok((send_stream, recv_stream)) => {
             send.stream.replace(send_stream);
             recv.stream.replace(recv_stream);
-            MagicEndpointResult::Ok
+            EndpointResult::Ok
         }
         Err(err) => {
             warn!("accept bi failed: {:?}", err);
-            MagicEndpointResult::AcceptBiFailed
+            EndpointResult::AcceptBiFailed
         }
     }
 }
@@ -325,7 +319,7 @@ pub fn connection_rtt(conn: &repr_c::Box<Connection>) -> u64 {
 pub fn connection_write_datagram(
     connection: &repr_c::Box<Connection>,
     data: slice::slice_ref<'_, u8>,
-) -> MagicEndpointResult {
+) -> EndpointResult {
     // TODO: is there a way to avoid this allocation?
     let data = bytes::Bytes::copy_from_slice(data.as_ref());
     TOKIO_EXECUTOR.block_on(async move {
@@ -338,10 +332,10 @@ pub fn connection_write_datagram(
             .send_datagram(data);
 
         match res {
-            Ok(()) => MagicEndpointResult::Ok,
+            Ok(()) => EndpointResult::Ok,
             Err(err) => {
                 warn!("send datagram failed: {:?}", err);
-                MagicEndpointResult::SendError
+                EndpointResult::SendError
             }
         }
     })
@@ -356,7 +350,7 @@ pub fn connection_write_datagram(
 pub fn connection_read_datagram(
     connection: &repr_c::Box<Connection>,
     data: &mut vec::Vec<u8>,
-) -> MagicEndpointResult {
+) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         connection
             .connection
@@ -374,11 +368,11 @@ pub fn connection_read_datagram(
                 v.resize(bytes.len(), 0u8);
                 v.copy_from_slice(&bytes);
             });
-            MagicEndpointResult::Ok
+            EndpointResult::Ok
         }
         Err(err) => {
             warn!("read failed: {:?}", err);
-            MagicEndpointResult::ReadError
+            EndpointResult::ReadError
         }
     }
 }
@@ -395,7 +389,7 @@ pub fn connection_read_datagram_timeout(
     connection: &repr_c::Box<Connection>,
     data: &mut vec::Vec<u8>,
     timeout_ms: u64,
-) -> MagicEndpointResult {
+) -> EndpointResult {
     let timeout = Duration::from_millis(timeout_ms);
     let res = TOKIO_EXECUTOR.block_on(async move {
         tokio::time::timeout(timeout, async move {
@@ -417,15 +411,15 @@ pub fn connection_read_datagram_timeout(
                 v.resize(bytes.len(), 0u8);
                 v.copy_from_slice(&bytes);
             });
-            MagicEndpointResult::Ok
+            EndpointResult::Ok
         }
         Ok(Err(err)) => {
             warn!("read failed: {:?}", err);
-            MagicEndpointResult::ReadError
+            EndpointResult::ReadError
         }
         Err(_err) => {
             warn!("read failed timeout");
-            MagicEndpointResult::Timeout
+            EndpointResult::Timeout
         }
     }
 }
@@ -449,11 +443,11 @@ pub fn connection_max_datagram_size(connection: &repr_c::Box<Connection>) -> usi
 ///
 /// Blocks the current thread until a connection is established.
 #[ffi_export]
-pub fn magic_endpoint_accept(
-    ep: &repr_c::Box<MagicEndpoint>,
+pub fn endpoint_accept(
+    ep: &repr_c::Box<Endpoint>,
     expected_alpn: slice::slice_ref<'_, u8>,
     out: &repr_c::Box<Connection>,
-) -> MagicEndpointResult {
+) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         let mut conn = ep
             .ep
@@ -474,14 +468,14 @@ pub fn magic_endpoint_accept(
     });
 
     match res {
-        Ok(()) => MagicEndpointResult::Ok,
+        Ok(()) => EndpointResult::Ok,
         Err(err) => {
             warn!(
                 "accept failed: {:?}: {:?}",
                 std::str::from_utf8(expected_alpn.as_ref()),
                 err
             );
-            MagicEndpointResult::AcceptFailed
+            EndpointResult::AcceptFailed
         }
     }
 }
@@ -492,11 +486,11 @@ pub fn magic_endpoint_accept(
 ///
 /// Blocks the current thread until a connection is established.
 #[ffi_export]
-pub fn magic_endpoint_accept_any(
-    ep: &repr_c::Box<MagicEndpoint>,
+pub fn endpoint_accept_any(
+    ep: &repr_c::Box<Endpoint>,
     alpn_out: &mut vec::Vec<u8>,
     out: &repr_c::Box<Connection>,
-) -> MagicEndpointResult {
+) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         let mut conn = ep
             .ep
@@ -518,10 +512,10 @@ pub fn magic_endpoint_accept_any(
     });
 
     match res {
-        Ok(()) => MagicEndpointResult::Ok,
+        Ok(()) => EndpointResult::Ok,
         Err(err) => {
             warn!("accept failed {:?}", err);
-            MagicEndpointResult::AcceptFailed
+            EndpointResult::AcceptFailed
         }
     }
 }
@@ -535,12 +529,12 @@ pub fn magic_endpoint_accept_any(
 /// `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
 /// called from another thread.
 #[ffi_export]
-pub fn magic_endpoint_accept_any_cb(
-    ep: repr_c::Box<MagicEndpoint>,
+pub fn endpoint_accept_any_cb(
+    ep: repr_c::Box<Endpoint>,
     ctx: *const c_void,
     cb: unsafe extern "C" fn(
         ctx: *const c_void,
-        err: MagicEndpointResult,
+        err: EndpointResult,
         alpn: vec::Vec<u8>,
         conn: repr_c::Box<Connection>,
     ),
@@ -553,9 +547,7 @@ pub fn magic_endpoint_accept_any_cb(
     TOKIO_EXECUTOR.spawn(async move {
         // make the compiler happy
         let _ = &ctx_ptr;
-        async fn connect(
-            ep: repr_c::Box<MagicEndpoint>,
-        ) -> anyhow::Result<(String, quinn::Connection)> {
+        async fn connect(ep: repr_c::Box<Endpoint>) -> anyhow::Result<(String, quinn::Connection)> {
             let mut conn = ep
                 .ep
                 .read()
@@ -578,14 +570,14 @@ pub fn magic_endpoint_accept_any_cb(
                 })
                 .into();
                 unsafe {
-                    cb(ctx_ptr.0, MagicEndpointResult::Ok, alpn, conn);
+                    cb(ctx_ptr.0, EndpointResult::Ok, alpn, conn);
                 }
             }
             Err(err) => unsafe {
                 warn!("accept failed: {:?}", err);
                 cb(
                     ctx_ptr.0,
-                    MagicEndpointResult::AcceptFailed,
+                    EndpointResult::AcceptFailed,
                     vec::Vec::EMPTY,
                     Box::<Connection>::default().into(),
                 );
@@ -601,7 +593,7 @@ pub fn magic_endpoint_accept_any_cb(
 pub fn connection_open_uni(
     conn: &repr_c::Box<Connection>,
     out: &mut repr_c::Box<SendStream>,
-) -> MagicEndpointResult {
+) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         let stream = conn
             .connection
@@ -618,11 +610,11 @@ pub fn connection_open_uni(
     match res {
         Ok(stream) => {
             out.stream.replace(stream);
-            MagicEndpointResult::Ok
+            EndpointResult::Ok
         }
         Err(err) => {
             warn!("open uni failed: {:?}", err);
-            MagicEndpointResult::ConnectUniError
+            EndpointResult::ConnectUniError
         }
     }
 }
@@ -635,7 +627,7 @@ pub fn connection_open_bi(
     conn: &repr_c::Box<Connection>,
     send: &mut repr_c::Box<SendStream>,
     recv: &mut repr_c::Box<RecvStream>,
-) -> MagicEndpointResult {
+) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         let (send_stream, recv_stream) = conn
             .connection
@@ -653,11 +645,11 @@ pub fn connection_open_bi(
         Ok((send_stream, recv_stream)) => {
             send.stream.replace(send_stream);
             recv.stream.replace(recv_stream);
-            MagicEndpointResult::Ok
+            EndpointResult::Ok
         }
         Err(err) => {
             warn!("connect bi failed: {:?}", err);
-            MagicEndpointResult::ConnectBiError
+            EndpointResult::ConnectBiError
         }
     }
 }
@@ -666,12 +658,12 @@ pub fn connection_open_bi(
 ///
 /// Blocks until the connection is established.
 #[ffi_export]
-pub fn magic_endpoint_connect(
-    ep: &repr_c::Box<MagicEndpoint>,
+pub fn endpoint_connect(
+    ep: &repr_c::Box<Endpoint>,
     alpn: slice::slice_ref<'_, u8>,
     node_addr: NodeAddr,
     out: &repr_c::Box<Connection>,
-) -> MagicEndpointResult {
+) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         let node_addr = node_addr.into();
         let conn = ep
@@ -688,20 +680,17 @@ pub fn magic_endpoint_connect(
     });
 
     match res {
-        Ok(()) => MagicEndpointResult::Ok,
+        Ok(()) => EndpointResult::Ok,
         Err(err) => {
             warn!("connect failed: {:?}", err);
-            MagicEndpointResult::ConnectError
+            EndpointResult::ConnectError
         }
     }
 }
 
-/// Get the the node dialing information of this magic endpoint.
+/// Get the the node dialing information of this iroh endpoint.
 #[ffi_export]
-pub fn magic_endpoint_my_addr(
-    ep: &repr_c::Box<MagicEndpoint>,
-    out: &mut NodeAddr,
-) -> MagicEndpointResult {
+pub fn endpoint_my_addr(ep: &repr_c::Box<Endpoint>, out: &mut NodeAddr) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         let addr = ep
             .ep
@@ -717,11 +706,11 @@ pub fn magic_endpoint_my_addr(
     match res {
         Ok(addr) => {
             *out = addr.into();
-            MagicEndpointResult::Ok
+            EndpointResult::Ok
         }
         Err(err) => {
             warn!("failed to retrieve addr: {:?}", err);
-            MagicEndpointResult::AddrError
+            EndpointResult::AddrError
         }
     }
 }
@@ -742,15 +731,15 @@ mod tests {
 
     #[test]
     fn test_config() {
-        let mut config = magic_endpoint_config_default();
+        let mut config = endpoint_config_default();
         let alpn0: vec::Vec<u8> = b"/hello/world/1234".to_vec().into();
         let alpn1: vec::Vec<u8> = b"/ha/coo/12".to_vec().into();
 
-        magic_endpoint_config_add_alpn(&mut config, alpn0.as_ref().into());
+        endpoint_config_add_alpn(&mut config, alpn0.as_ref().into());
         assert_eq!(config.alpn_protocols[0].as_ref(), alpn0.as_ref());
         assert_eq!(config.alpn_protocols[0].as_ref().len(), 17);
 
-        magic_endpoint_config_add_alpn(&mut config, alpn1.as_ref().into());
+        endpoint_config_add_alpn(&mut config, alpn1.as_ref().into());
         assert_eq!(config.alpn_protocols[1].as_ref(), alpn1.as_ref());
         assert_eq!(config.alpn_protocols[1].as_ref().len(), 10);
     }
@@ -759,37 +748,37 @@ mod tests {
     fn stream_uni_a_b() {
         let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
         // create config
-        let mut config_server = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
+        let mut config_server = endpoint_config_default();
+        endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
 
-        let mut config_client = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
+        let mut config_client = endpoint_config_default();
+        endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
 
         let (s, r) = std::sync::mpsc::channel();
 
         // setup server
         let alpn_s = alpn.clone();
         let server_thread = std::thread::spawn(move || {
-            // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_server, 0, &mut ep);
-            assert_eq!(bind_res, MagicEndpointResult::Ok);
+            // create iroh endpoint and bind
+            let mut ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_server, 0, &mut ep);
+            assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
-            let res = magic_endpoint_my_addr(&ep, &mut node_addr);
-            assert_eq!(res, MagicEndpointResult::Ok);
+            let res = endpoint_my_addr(&ep, &mut node_addr);
+            assert_eq!(res, EndpointResult::Ok);
 
             s.send(node_addr).unwrap();
 
             // accept connection
             println!("[s] accepting conn");
             let mut conn = connection_default();
-            let accept_res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
-            assert_eq!(accept_res, MagicEndpointResult::Ok);
+            let accept_res = endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            assert_eq!(accept_res, EndpointResult::Ok);
 
             let mut recv_stream = recv_stream_default();
             let accept_res = connection_accept_uni(&conn, &mut recv_stream);
-            assert_eq!(accept_res, MagicEndpointResult::Ok);
+            assert_eq!(accept_res, EndpointResult::Ok);
 
             println!("[s] reading");
 
@@ -804,10 +793,10 @@ mod tests {
 
         // setup client
         let client_thread = std::thread::spawn(move || {
-            // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_client, 0, &mut ep);
-            assert_eq!(bind_res, MagicEndpointResult::Ok);
+            // create iroh endpoint and bind
+            let mut ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_client, 0, &mut ep);
+            assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
             let node_addr = r.recv().unwrap();
@@ -815,19 +804,19 @@ mod tests {
             println!("[c] dialing");
             // connect to server
             let mut conn = connection_default();
-            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
-            assert_eq!(connect_res, MagicEndpointResult::Ok);
+            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+            assert_eq!(connect_res, EndpointResult::Ok);
 
             let mut send_stream = send_stream_default();
             let open_res = connection_open_uni(&conn, &mut send_stream);
-            assert_eq!(open_res, MagicEndpointResult::Ok);
+            assert_eq!(open_res, EndpointResult::Ok);
 
             println!("[c] sending");
             let send_res = send_stream_write(&mut send_stream, b"hello world"[..].into());
-            assert_eq!(send_res, MagicEndpointResult::Ok);
+            assert_eq!(send_res, EndpointResult::Ok);
 
             let finish_res = send_stream_finish(send_stream);
-            assert_eq!(finish_res, MagicEndpointResult::Ok);
+            assert_eq!(finish_res, EndpointResult::Ok);
         });
 
         server_thread.join().unwrap();
@@ -838,54 +827,54 @@ mod tests {
     fn stream_uni_b_a() {
         let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
         // create config
-        let mut config_server = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
+        let mut config_server = endpoint_config_default();
+        endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
 
-        let mut config_client = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
+        let mut config_client = endpoint_config_default();
+        endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
 
         let (s, r) = std::sync::mpsc::channel();
 
         // setup server
         let alpn_s = alpn.clone();
         let server_thread = std::thread::spawn(move || {
-            // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_server, 0, &mut ep);
-            assert_eq!(bind_res, MagicEndpointResult::Ok);
+            // create iroh endpoint and bind
+            let mut ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_server, 0, &mut ep);
+            assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
-            let res = magic_endpoint_my_addr(&ep, &mut node_addr);
-            assert_eq!(res, MagicEndpointResult::Ok);
+            let res = endpoint_my_addr(&ep, &mut node_addr);
+            assert_eq!(res, EndpointResult::Ok);
 
             s.send(node_addr).unwrap();
 
             // accept connection
             println!("[s] accepting conn");
             let mut conn = connection_default();
-            let accept_res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
-            assert_eq!(accept_res, MagicEndpointResult::Ok);
+            let accept_res = endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            assert_eq!(accept_res, EndpointResult::Ok);
 
             println!("[s] opening uni");
             let mut send_stream = send_stream_default();
             let accept_res = connection_open_uni(&conn, &mut send_stream);
-            assert_eq!(accept_res, MagicEndpointResult::Ok);
+            assert_eq!(accept_res, EndpointResult::Ok);
 
             println!("[s] sending");
 
             let send_res = send_stream_write(&mut send_stream, b"hello world"[..].into());
-            assert_eq!(send_res, MagicEndpointResult::Ok);
+            assert_eq!(send_res, EndpointResult::Ok);
 
             let finish_res = send_stream_finish(send_stream);
-            assert_eq!(finish_res, MagicEndpointResult::Ok);
+            assert_eq!(finish_res, EndpointResult::Ok);
         });
 
         // setup client
         let client_thread = std::thread::spawn(move || {
-            // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_client, 0, &mut ep);
-            assert_eq!(bind_res, MagicEndpointResult::Ok);
+            // create iroh endpoint and bind
+            let mut ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_client, 0, &mut ep);
+            assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
             let node_addr = r.recv().unwrap();
@@ -893,13 +882,13 @@ mod tests {
             println!("[c] dialing");
             // connect to server
             let mut conn = connection_default();
-            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
-            assert_eq!(connect_res, MagicEndpointResult::Ok);
+            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+            assert_eq!(connect_res, EndpointResult::Ok);
 
             println!("[c] accepting uni");
             let mut recv_stream = recv_stream_default();
             let open_res = connection_accept_uni(&conn, &mut recv_stream);
-            assert_eq!(open_res, MagicEndpointResult::Ok);
+            assert_eq!(open_res, EndpointResult::Ok);
 
             println!("[c] reading");
             let mut recv_buffer = vec![0u8; 1024];
@@ -919,11 +908,11 @@ mod tests {
     fn datagram() {
         let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
         // create config
-        let mut config_server = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
+        let mut config_server = endpoint_config_default();
+        endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
 
-        let mut config_client = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
+        let mut config_client = endpoint_config_default();
+        endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
 
         let (s, r) = std::sync::mpsc::channel();
         let (server_s, server_r) = std::sync::mpsc::channel();
@@ -931,38 +920,38 @@ mod tests {
         // setup server
         let alpn_s = alpn.clone();
         let server_thread = std::thread::spawn(move || {
-            // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_server, 0, &mut ep);
-            assert_eq!(bind_res, MagicEndpointResult::Ok);
+            // create iroh endpoint and bind
+            let mut ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_server, 0, &mut ep);
+            assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
-            let res = magic_endpoint_my_addr(&ep, &mut node_addr);
-            assert_eq!(res, MagicEndpointResult::Ok);
+            let res = endpoint_my_addr(&ep, &mut node_addr);
+            assert_eq!(res, EndpointResult::Ok);
 
             s.send(node_addr).unwrap();
 
             // accept connection
             println!("[s] accepting conn");
             let mut conn = connection_default();
-            let accept_res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
-            assert_eq!(accept_res, MagicEndpointResult::Ok);
+            let accept_res = endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            assert_eq!(accept_res, EndpointResult::Ok);
 
             println!("[s] reading");
 
             let mut recv_buffer = rust_buffer_alloc(1024);
             let read_res = connection_read_datagram(&conn, &mut recv_buffer);
-            assert_eq!(read_res, MagicEndpointResult::Ok);
+            assert_eq!(read_res, EndpointResult::Ok);
             assert_eq!(std::str::from_utf8(&recv_buffer).unwrap(), "hello world");
             server_s.send(()).unwrap();
         });
 
         // setup client
         let client_thread = std::thread::spawn(move || {
-            // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_client, 0, &mut ep);
-            assert_eq!(bind_res, MagicEndpointResult::Ok);
+            // create iroh endpoint and bind
+            let mut ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_client, 0, &mut ep);
+            assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
             let node_addr = r.recv().unwrap();
@@ -970,15 +959,15 @@ mod tests {
             println!("[c] dialing");
             // connect to server
             let mut conn = connection_default();
-            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
-            assert_eq!(connect_res, MagicEndpointResult::Ok);
+            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+            assert_eq!(connect_res, EndpointResult::Ok);
 
             println!("[c] sending");
             let max_datagram = connection_max_datagram_size(&conn);
             assert!(max_datagram > 0);
             dbg!(max_datagram);
             let send_res = connection_write_datagram(&mut conn, b"hello world"[..].into());
-            assert_eq!(send_res, MagicEndpointResult::Ok);
+            assert_eq!(send_res, EndpointResult::Ok);
 
             // wait for the server to have received
             server_r.recv().unwrap();
@@ -992,11 +981,11 @@ mod tests {
     fn stream_bi() {
         let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
         // create config
-        let mut config_server = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
+        let mut config_server = endpoint_config_default();
+        endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
 
-        let mut config_client = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
+        let mut config_client = endpoint_config_default();
+        endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
 
         let (s, r) = std::sync::mpsc::channel();
         let (client_s, client_r) = std::sync::mpsc::channel();
@@ -1004,27 +993,27 @@ mod tests {
         // setup server
         let alpn_s = alpn.clone();
         let server_thread = std::thread::spawn(move || {
-            // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_server, 0, &mut ep);
-            assert_eq!(bind_res, MagicEndpointResult::Ok);
+            // create iroh endpoint and bind
+            let mut ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_server, 0, &mut ep);
+            assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
-            let res = magic_endpoint_my_addr(&ep, &mut node_addr);
-            assert_eq!(res, MagicEndpointResult::Ok);
+            let res = endpoint_my_addr(&ep, &mut node_addr);
+            assert_eq!(res, EndpointResult::Ok);
 
             s.send(node_addr).unwrap();
 
             // accept connection
             println!("[s] accepting conn");
             let mut conn = connection_default();
-            let res = magic_endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
-            assert_eq!(res, MagicEndpointResult::Ok);
+            let res = endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            assert_eq!(res, EndpointResult::Ok);
 
             let mut send_stream = send_stream_default();
             let mut recv_stream = recv_stream_default();
             let accept_res = connection_accept_bi(&conn, &mut send_stream, &mut recv_stream);
-            assert_eq!(accept_res, MagicEndpointResult::Ok);
+            assert_eq!(accept_res, EndpointResult::Ok);
 
             println!("[s] reading");
 
@@ -1038,19 +1027,19 @@ mod tests {
 
             println!("[s] sending");
             let send_res = send_stream_write(&mut send_stream, b"hello client"[..].into());
-            assert_eq!(send_res, MagicEndpointResult::Ok);
+            assert_eq!(send_res, EndpointResult::Ok);
 
             let res = send_stream_finish(send_stream);
-            assert_eq!(res, MagicEndpointResult::Ok);
+            assert_eq!(res, EndpointResult::Ok);
             client_r.recv().unwrap();
         });
 
         // setup client
         let client_thread = std::thread::spawn(move || {
-            // create magic endpoint and bind
-            let mut ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_client, 0, &mut ep);
-            assert_eq!(bind_res, MagicEndpointResult::Ok);
+            // create iroh endpoint and bind
+            let mut ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_client, 0, &mut ep);
+            assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
             let node_addr = r.recv().unwrap();
@@ -1058,17 +1047,17 @@ mod tests {
             println!("[c] dialing");
             // connect to server
             let mut conn = connection_default();
-            let connect_res = magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
-            assert_eq!(connect_res, MagicEndpointResult::Ok);
+            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+            assert_eq!(connect_res, EndpointResult::Ok);
 
             let mut send_stream = send_stream_default();
             let mut recv_stream = recv_stream_default();
             let open_res = connection_open_bi(&conn, &mut send_stream, &mut recv_stream);
-            assert_eq!(open_res, MagicEndpointResult::Ok);
+            assert_eq!(open_res, EndpointResult::Ok);
 
             println!("[c] sending");
             let send_res = send_stream_write(&mut send_stream, b"hello world"[..].into());
-            assert_eq!(send_res, MagicEndpointResult::Ok);
+            assert_eq!(send_res, EndpointResult::Ok);
 
             println!("[c] reading");
 
@@ -1081,7 +1070,7 @@ mod tests {
             );
 
             let finish_res = send_stream_finish(send_stream);
-            assert_eq!(finish_res, MagicEndpointResult::Ok);
+            assert_eq!(finish_res, EndpointResult::Ok);
             client_s.send(()).unwrap();
         });
 
@@ -1095,13 +1084,13 @@ mod tests {
         let alpn2: vec::Vec<u8> = b"/cool/alpn/2".to_vec().into();
 
         // create config
-        let mut config_server = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_server, alpn1.as_ref().into());
-        magic_endpoint_config_add_alpn(&mut config_server, alpn2.as_ref().into());
+        let mut config_server = endpoint_config_default();
+        endpoint_config_add_alpn(&mut config_server, alpn1.as_ref().into());
+        endpoint_config_add_alpn(&mut config_server, alpn2.as_ref().into());
 
-        let mut config_client = magic_endpoint_config_default();
-        magic_endpoint_config_add_alpn(&mut config_client, alpn1.as_ref().into());
-        magic_endpoint_config_add_alpn(&mut config_client, alpn2.as_ref().into());
+        let mut config_client = endpoint_config_default();
+        endpoint_config_add_alpn(&mut config_client, alpn1.as_ref().into());
+        endpoint_config_add_alpn(&mut config_client, alpn2.as_ref().into());
 
         let (s, r) = std::sync::mpsc::channel();
         let (client1_s, client1_r) = std::sync::mpsc::channel();
@@ -1111,14 +1100,14 @@ mod tests {
         let alpn1_s = alpn1.clone();
         let alpn2_s = alpn2.clone();
         let server_thread = std::thread::spawn(move || {
-            // create magic endpoint and bind
-            let ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_server, 0, &ep);
-            assert_eq!(bind_res, MagicEndpointResult::Ok);
+            // create iroh endpoint and bind
+            let ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_server, 0, &ep);
+            assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
-            let res = magic_endpoint_my_addr(&ep, &mut node_addr);
-            assert_eq!(res, MagicEndpointResult::Ok);
+            let res = endpoint_my_addr(&ep, &mut node_addr);
+            assert_eq!(res, EndpointResult::Ok);
 
             s.send(node_addr).unwrap();
 
@@ -1136,8 +1125,8 @@ mod tests {
                     println!("[s][{i}] accepting conn");
                     let mut conn = connection_default();
                     let mut alpn = vec::Vec::EMPTY;
-                    let res = magic_endpoint_accept_any(&ep, &mut alpn, &mut conn);
-                    assert_eq!(res, MagicEndpointResult::Ok);
+                    let res = endpoint_accept_any(&ep, &mut alpn, &mut conn);
+                    assert_eq!(res, EndpointResult::Ok);
 
                     let (j, client_r) = if alpn.as_ref() == alpn1_s.as_ref() {
                         (0, clients.lock().unwrap().remove(0))
@@ -1151,7 +1140,7 @@ mod tests {
                     let mut recv_stream = recv_stream_default();
                     let accept_res =
                         connection_accept_bi(&conn, &mut send_stream, &mut recv_stream);
-                    assert_eq!(accept_res, MagicEndpointResult::Ok);
+                    assert_eq!(accept_res, EndpointResult::Ok);
 
                     println!("[s][{j}] reading");
 
@@ -1169,10 +1158,10 @@ mod tests {
                         &mut send_stream,
                         format!("hello client {j}").as_bytes().into(),
                     );
-                    assert_eq!(send_res, MagicEndpointResult::Ok);
+                    assert_eq!(send_res, EndpointResult::Ok);
 
                     let res = send_stream_finish(send_stream);
-                    assert_eq!(res, MagicEndpointResult::Ok);
+                    assert_eq!(res, EndpointResult::Ok);
                     client_r.recv().unwrap();
                 }));
             }
@@ -1184,10 +1173,10 @@ mod tests {
 
         // setup client
         let client_thread = std::thread::spawn(move || {
-            // create magic endpoint and bind
-            let ep = magic_endpoint_default();
-            let bind_res = magic_endpoint_bind(&config_client, 0, &ep);
-            assert_eq!(bind_res, MagicEndpointResult::Ok);
+            // create iroh endpoint and bind
+            let ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_client, 0, &ep);
+            assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
             let node_addr = r.recv().unwrap();
@@ -1210,21 +1199,20 @@ mod tests {
                     // connect to server
                     let mut conn = connection_default();
                     let alpn = if i == 0 { alpn1 } else { alpn2 };
-                    let connect_res =
-                        magic_endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
-                    assert_eq!(connect_res, MagicEndpointResult::Ok);
+                    let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+                    assert_eq!(connect_res, EndpointResult::Ok);
 
                     let mut send_stream = send_stream_default();
                     let mut recv_stream = recv_stream_default();
                     let open_res = connection_open_bi(&conn, &mut send_stream, &mut recv_stream);
-                    assert_eq!(open_res, MagicEndpointResult::Ok);
+                    assert_eq!(open_res, EndpointResult::Ok);
 
                     println!("[c][{i}] sending");
                     let send_res = send_stream_write(
                         &mut send_stream,
                         format!("hello world {i}").as_bytes().into(),
                     );
-                    assert_eq!(send_res, MagicEndpointResult::Ok);
+                    assert_eq!(send_res, EndpointResult::Ok);
 
                     println!("[c][{i}] reading");
 
@@ -1238,7 +1226,7 @@ mod tests {
                     );
 
                     let finish_res = send_stream_finish(send_stream);
-                    assert_eq!(finish_res, MagicEndpointResult::Ok);
+                    assert_eq!(finish_res, EndpointResult::Ok);
                     client_s.send(()).unwrap();
                 }));
             }
