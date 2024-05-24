@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use safer_ffi::{prelude::*, slice, vec};
 
-use crate::magic_endpoint::MagicEndpointResult;
+use crate::endpoint::EndpointResult;
 use crate::util::TOKIO_EXECUTOR;
 
 /// A stream that can only be used to receive data.
@@ -75,7 +75,7 @@ pub fn recv_stream_read_to_end_timeout(
     data: &mut vec::Vec<u8>,
     size_limit: usize,
     timeout_ms: u64,
-) -> MagicEndpointResult {
+) -> EndpointResult {
     let timeout = Duration::from_millis(timeout_ms);
     let res = TOKIO_EXECUTOR.block_on(async move {
         tokio::time::timeout(timeout, async move {
@@ -94,10 +94,10 @@ pub fn recv_stream_read_to_end_timeout(
             data.with_rust_mut(|v| {
                 *v = read;
             });
-            MagicEndpointResult::Ok
+            EndpointResult::Ok
         }
-        Ok(Err(_err)) => MagicEndpointResult::ReadError,
-        Err(_err) => MagicEndpointResult::Timeout,
+        Ok(Err(_err)) => EndpointResult::ReadError,
+        Err(_err) => EndpointResult::Timeout,
     }
 }
 
@@ -139,7 +139,7 @@ pub fn send_stream_id(stream: &repr_c::Box<SendStream>) -> u64 {
 pub fn send_stream_write(
     stream: &mut repr_c::Box<SendStream>,
     data: slice::slice_ref<'_, u8>,
-) -> MagicEndpointResult {
+) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         stream
             .stream
@@ -150,8 +150,8 @@ pub fn send_stream_write(
     });
 
     match res {
-        Ok(()) => MagicEndpointResult::Ok,
-        Err(_err) => MagicEndpointResult::SendError,
+        Ok(()) => EndpointResult::Ok,
+        Err(_err) => EndpointResult::SendError,
     }
 }
 
@@ -161,7 +161,7 @@ pub fn send_stream_write(
 ///
 /// Blocks the current thread.
 #[ffi_export]
-pub fn send_stream_finish(mut stream: repr_c::Box<SendStream>) -> MagicEndpointResult {
+pub fn send_stream_finish(mut stream: repr_c::Box<SendStream>) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         stream
             .stream
@@ -172,10 +172,10 @@ pub fn send_stream_finish(mut stream: repr_c::Box<SendStream>) -> MagicEndpointR
     });
 
     match res {
-        Ok(()) => MagicEndpointResult::Ok,
+        Ok(()) => EndpointResult::Ok,
         Err(_err) => {
             dbg!(_err);
-            MagicEndpointResult::SendError
+            EndpointResult::SendError
         }
     }
 }

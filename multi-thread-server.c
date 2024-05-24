@@ -8,7 +8,7 @@
 
 #include "irohnet.h"
 
-int run_server(MagicEndpoint_t *ep, slice_ref_uint8_t alpn_slice, bool json_output)
+int run_server(Endpoint_t *ep, slice_ref_uint8_t alpn_slice, bool json_output)
 {
     if (json_output)
     {
@@ -23,7 +23,7 @@ int run_server(MagicEndpoint_t *ep, slice_ref_uint8_t alpn_slice, bool json_outp
 
     // Accept connections
     Connection_t *conn = connection_default();
-    int res = magic_endpoint_accept(&ep, alpn_slice, &conn);
+    int res = endpoint_accept(&ep, alpn_slice, &conn);
     if (res != 0)
     {
         fprintf(stderr, "failed to accept connection");
@@ -130,7 +130,7 @@ int run_server(MagicEndpoint_t *ep, slice_ref_uint8_t alpn_slice, bool json_outp
     free(recv_buffer);
     recv_stream_free(recv_stream);
     connection_free(conn);
-    magic_endpoint_free(ep);
+    endpoint_free(ep);
 
     return 0;
 }
@@ -138,9 +138,9 @@ int run_server(MagicEndpoint_t *ep, slice_ref_uint8_t alpn_slice, bool json_outp
 // Define a structure to pass multiple parameters to the pthread functions
 typedef struct
 {
-    MagicEndpointConfig_t *config;
+    EndpointConfig_t *config;
     slice_ref_uint8_t alpn_slice;
-    MagicEndpoint_t *ep;
+    Endpoint_t *ep;
     bool json_output;     // For server
     const char *node_id;  // For client
     const char *relay_url; // For client
@@ -175,19 +175,19 @@ int main(int argc, char const *const argv[])
     server_params[0].alpn_slice.ptr = (uint8_t *)&alpn1[0];
     server_params[0].alpn_slice.len = strlen(alpn1);
     server_params[0].json_output = false; // Or true, based on your requirement
-    MagicEndpointConfig_t config = magic_endpoint_config_default();
-    magic_endpoint_config_add_alpn(&config, server_params[0].alpn_slice);
+    EndpointConfig_t config = endpoint_config_default();
+    endpoint_config_add_alpn(&config, server_params[0].alpn_slice);
     server_params[0].config = &config;
 
     // Server thread 2 with different ALPN
     server_params[1].alpn_slice.ptr = (uint8_t *)&alpn2[0];
     server_params[1].alpn_slice.len = strlen(alpn2);
     server_params[1].json_output = false; // Or true
-    magic_endpoint_config_add_alpn(&config, server_params[1].alpn_slice);
+    endpoint_config_add_alpn(&config, server_params[1].alpn_slice);
     server_params[1].config = &config;
 
-    MagicEndpoint_t *ep = magic_endpoint_default();
-    int bind_res = magic_endpoint_bind(&config, 0, &ep);
+    Endpoint_t *ep = endpoint_default();
+    int bind_res = endpoint_bind(&config, 0, &ep);
     if (bind_res != 0)
     {
         fprintf(stderr, "failed to bind server\n");
@@ -196,7 +196,7 @@ int main(int argc, char const *const argv[])
 
     // Print details
     NodeAddr_t my_addr = node_addr_default();
-    int addr_res = magic_endpoint_my_addr(&ep, &my_addr);
+    int addr_res = endpoint_my_addr(&ep, &my_addr);
     if (addr_res != 0)
     {
         fprintf(stderr, "faile to get my address");

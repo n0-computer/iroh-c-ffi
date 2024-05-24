@@ -24,12 +24,12 @@ impl PartialEq for NodeAddr {
     }
 }
 
-impl From<NodeAddr> for iroh_net::magic_endpoint::NodeAddr {
+impl From<NodeAddr> for iroh_net::endpoint::NodeAddr {
     fn from(addr: NodeAddr) -> Self {
         let direct_addresses = addr.direct_addresses.iter().map(|a| a.addr).collect();
-        iroh_net::magic_endpoint::NodeAddr {
+        iroh_net::endpoint::NodeAddr {
             node_id: addr.node_id.into(),
-            info: iroh_net::magic_endpoint::AddrInfo {
+            info: iroh_net::endpoint::AddrInfo {
                 relay_url: addr
                     .relay_url
                     .map(|u| u.url.clone().expect("url not initialized")),
@@ -39,8 +39,8 @@ impl From<NodeAddr> for iroh_net::magic_endpoint::NodeAddr {
     }
 }
 
-impl From<iroh_net::magic_endpoint::NodeAddr> for NodeAddr {
-    fn from(addr: iroh_net::magic_endpoint::NodeAddr) -> Self {
+impl From<iroh_net::endpoint::NodeAddr> for NodeAddr {
+    fn from(addr: iroh_net::endpoint::NodeAddr) -> Self {
         let direct_addresses = addr
             .info
             .direct_addresses

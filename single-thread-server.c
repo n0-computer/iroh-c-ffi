@@ -28,12 +28,12 @@ int main(int argc, char const *const argv[]) {
   alpn1.len = strlen(alpn_str1);
   alpn2.ptr = (uint8_t *)&alpn_str2[0];
   alpn2.len = strlen(alpn_str2);
-  MagicEndpointConfig_t config = magic_endpoint_config_default();
-  magic_endpoint_config_add_alpn(&config, alpn1);
-  magic_endpoint_config_add_alpn(&config, alpn2);
+  EndpointConfig_t config = endpoint_config_default();
+  endpoint_config_add_alpn(&config, alpn1);
+  endpoint_config_add_alpn(&config, alpn2);
 
-  MagicEndpoint_t *ep = magic_endpoint_default();
-  int bind_res = magic_endpoint_bind(&config, 0, &ep);
+  Endpoint_t *ep = endpoint_default();
+  int bind_res = endpoint_bind(&config, 0, &ep);
   if (bind_res != 0) {
     fprintf(stderr, "failed to bind server\n");
     return -1;
@@ -41,7 +41,7 @@ int main(int argc, char const *const argv[]) {
 
   // Print details
   NodeAddr_t my_addr = node_addr_default();
-  int addr_res = magic_endpoint_my_addr(&ep, &my_addr);
+  int addr_res = endpoint_my_addr(&ep, &my_addr);
   if (addr_res != 0) {
     fprintf(stderr, "faile to get my address");
     return -1;
@@ -66,13 +66,13 @@ int main(int argc, char const *const argv[]) {
   conn2 = connection_default();
   while (accepted < 2) {
     Vec_uint8_t alpn_slice_out = rust_buffer_alloc(0);
-    // int res = magic_endpoint_accept(&ep, alpn_slice_control, &conn);
+    // int res = endpoint_accept(&ep, alpn_slice_control, &conn);
 
     int res;
     if (accepted == 0)
-      res = magic_endpoint_accept_any(&ep, &alpn_slice_out, &conn1);
+      res = endpoint_accept_any(&ep, &alpn_slice_out, &conn1);
     else
-      res = magic_endpoint_accept_any(&ep, &alpn_slice_out, &conn2);
+      res = endpoint_accept_any(&ep, &alpn_slice_out, &conn2);
 
     printf("Connection accepted with alpn %s \n", alpn_slice_out.ptr);
 
@@ -93,7 +93,7 @@ int main(int argc, char const *const argv[]) {
   printf("reading to end\n");
   Vec_uint8_t recvBuffer = rust_buffer_alloc(0);
   err = recv_stream_read_to_end_timeout(&recv_stream, &recvBuffer, 1024, 5000);
-  if (err == MAGIC_ENDPOINT_RESULT_TIMEOUT) {
+  if (err == ENDPOINT_RESULT_TIMEOUT) {
     printf("Response timed out\n");
     return 1;
   } else if (err != 0) {
@@ -123,7 +123,7 @@ int main(int argc, char const *const argv[]) {
 
   printf("reading to end\n");
   err = recv_stream_read_to_end_timeout(&recv_stream2, &recvBuffer, 1024, 5000);
-  if (err == MAGIC_ENDPOINT_RESULT_TIMEOUT) {
+  if (err == ENDPOINT_RESULT_TIMEOUT) {
     printf("Response timed out\n");
     return 1;
   } else if (err != 0) {

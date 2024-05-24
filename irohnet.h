@@ -33,73 +33,73 @@ typedef struct RecvStream RecvStream_t;
 #include <stdint.h>
 
 /** \brief
- *  Result of dealing with a magic endpoint.
+ *  Result of dealing with a iroh endpoint.
  */
 /** \remark Has the same ABI as `uint8_t` **/
 #ifdef DOXYGEN
 typedef
 #endif
-enum MagicEndpointResult {
+enum EndpointResult {
     /** \brief
      *  Everything is ok
      */
-    MAGIC_ENDPOINT_RESULT_OK = 0,
+    ENDPOINT_RESULT_OK = 0,
     /** \brief
      *  Failed to bind.
      */
-    MAGIC_ENDPOINT_RESULT_BIND_ERROR,
+    ENDPOINT_RESULT_BIND_ERROR,
     /** \brief
      *  Failed to accept a connection.
      */
-    MAGIC_ENDPOINT_RESULT_ACCEPT_FAILED,
+    ENDPOINT_RESULT_ACCEPT_FAILED,
     /** \brief
      *  Failed to accept a uni directional stream,
      */
-    MAGIC_ENDPOINT_RESULT_ACCEPT_UNI_FAILED,
+    ENDPOINT_RESULT_ACCEPT_UNI_FAILED,
     /** \brief
      *  Failed to accept a bi directional stream,
      */
-    MAGIC_ENDPOINT_RESULT_ACCEPT_BI_FAILED,
+    ENDPOINT_RESULT_ACCEPT_BI_FAILED,
     /** \brief
      *  Failed to connect and establish a uni directional stream.
      */
-    MAGIC_ENDPOINT_RESULT_CONNECT_UNI_ERROR,
+    ENDPOINT_RESULT_CONNECT_UNI_ERROR,
     /** \brief
      *  Failed to connect and establish a bi directional stream.
      */
-    MAGIC_ENDPOINT_RESULT_CONNECT_BI_ERROR,
+    ENDPOINT_RESULT_CONNECT_BI_ERROR,
     /** \brief
      *  Failed to connect.
      */
-    MAGIC_ENDPOINT_RESULT_CONNECT_ERROR,
+    ENDPOINT_RESULT_CONNECT_ERROR,
     /** \brief
      *  Unable to retrive node addr.
      */
-    MAGIC_ENDPOINT_RESULT_ADDR_ERROR,
+    ENDPOINT_RESULT_ADDR_ERROR,
     /** \brief
      *  Error while sending data.
      */
-    MAGIC_ENDPOINT_RESULT_SEND_ERROR,
+    ENDPOINT_RESULT_SEND_ERROR,
     /** \brief
      *  Error while reading data.
      */
-    MAGIC_ENDPOINT_RESULT_READ_ERROR,
+    ENDPOINT_RESULT_READ_ERROR,
     /** \brief
      *  Timeout elapsed.
      */
-    MAGIC_ENDPOINT_RESULT_TIMEOUT,
+    ENDPOINT_RESULT_TIMEOUT,
 }
 #ifndef DOXYGEN
 ; typedef uint8_t
 #endif
-MagicEndpointResult_t;
+EndpointResult_t;
 
 /** \brief
  *  Accept a bi directional stream on this endpoint.
  *
  *  Blocks the current thread.
  */
-MagicEndpointResult_t
+EndpointResult_t
 connection_accept_bi (
     Connection_t * const * conn,
     SendStream_t * * send,
@@ -110,7 +110,7 @@ connection_accept_bi (
  *
  *  Blocks the current thread.
  */
-MagicEndpointResult_t
+EndpointResult_t
 connection_accept_uni (
     Connection_t * const * conn,
     RecvStream_t * * out);
@@ -140,7 +140,7 @@ connection_max_datagram_size (
  *
  *  Blocks the current thread until the connection is established.
  */
-MagicEndpointResult_t
+EndpointResult_t
 connection_open_bi (
     Connection_t * const * conn,
     SendStream_t * * send,
@@ -151,7 +151,7 @@ connection_open_bi (
  *
  *  Blocks the current thread until the connection is established.
  */
-MagicEndpointResult_t
+EndpointResult_t
 connection_open_uni (
     Connection_t * const * conn,
     SendStream_t * * out);
@@ -177,7 +177,7 @@ typedef struct Vec_uint8 {
  *
  *  Blocks the current thread until a datagram is received.
  */
-MagicEndpointResult_t
+EndpointResult_t
 connection_read_datagram (
     Connection_t * const * connection,
     Vec_uint8_t * data);
@@ -191,7 +191,7 @@ connection_read_datagram (
  *
  *  Blocks the current thread until a datagram is received or the timeout is expired.
  */
-MagicEndpointResult_t
+EndpointResult_t
 connection_read_datagram_timeout (
     Connection_t * const * connection,
     Vec_uint8_t * data,
@@ -240,32 +240,24 @@ typedef struct slice_ref_uint8 {
  *
  *  Data must not be larger than the available `max_datagram` size.
  */
-MagicEndpointResult_t
+EndpointResult_t
 connection_write_datagram (
     Connection_t * const * connection,
     slice_ref_uint8_t data);
 
 /** \brief
- *  Enables tracing for iroh.
- *
- *  Log level can be controlled using the env variable `IROH_NET_LOG`.
+ *  An endpoint that leverages a quic endpoint, backed by a iroh socket.
  */
-void
-iroh_enable_tracing (void);
-
-/** \brief
- *  An endpoint that leverages a quic endpoint, backed by a magic socket.
- */
-typedef struct MagicEndpoint MagicEndpoint_t;
+typedef struct Endpoint Endpoint_t;
 
 /** \brief
  *  Accept a new connection on this endpoint.
  *
  *  Blocks the current thread until a connection is established.
  */
-MagicEndpointResult_t
-magic_endpoint_accept (
-    MagicEndpoint_t * const * ep,
+EndpointResult_t
+endpoint_accept (
+    Endpoint_t * const * ep,
     slice_ref_uint8_t expected_alpn,
     Connection_t * const * out);
 
@@ -276,9 +268,9 @@ magic_endpoint_accept (
  *
  *  Blocks the current thread until a connection is established.
  */
-MagicEndpointResult_t
-magic_endpoint_accept_any (
-    MagicEndpoint_t * const * ep,
+EndpointResult_t
+endpoint_accept_any (
+    Endpoint_t * const * ep,
     Vec_uint8_t * alpn_out,
     Connection_t * const * out);
 
@@ -293,10 +285,10 @@ magic_endpoint_accept_any (
  *  called from another thread.
  */
 void
-magic_endpoint_accept_any_cb (
-    MagicEndpoint_t * ep,
+endpoint_accept_any_cb (
+    Endpoint_t * ep,
     void const * ctx,
-    void (*cb)(void const *, MagicEndpointResult_t, Vec_uint8_t, Connection_t *));
+    void (*cb)(void const *, EndpointResult_t, Vec_uint8_t, Connection_t *));
 
 /** \brief
  *  The options to configure relay.
@@ -340,9 +332,9 @@ typedef struct Vec_Vec_uint8 {
 typedef struct SecretKey SecretKey_t;
 
 /** \brief
- *  Configuration options for the MagicEndpoint.
+ *  Configuration options for the Endpoint.
  */
-typedef struct MagicEndpointConfig {
+typedef struct EndpointConfig {
     /** <No documentation available> */
     RelayMode_t relay_mode;
 
@@ -354,7 +346,7 @@ typedef struct MagicEndpointConfig {
 
     /** <No documentation available> */
     char * peers_data_path;
-} MagicEndpointConfig_t;
+} EndpointConfig_t;
 
 /** \brief
  *  Attempts to bind the endpoint to the given port.
@@ -363,49 +355,49 @@ typedef struct MagicEndpointConfig {
  *
  *  Blocks the current thread.
  */
-MagicEndpointResult_t
-magic_endpoint_bind (
-    MagicEndpointConfig_t const * config,
+EndpointResult_t
+endpoint_bind (
+    EndpointConfig_t const * config,
     uint16_t port,
-    MagicEndpoint_t * const * out);
+    Endpoint_t * const * out);
 
 /** \brief
  *  Add the given ALPN to the list of accepted ALPNs.
  */
 void
-magic_endpoint_config_add_alpn (
-    MagicEndpointConfig_t * config,
+endpoint_config_add_alpn (
+    EndpointConfig_t * config,
     slice_ref_uint8_t alpn);
 
 /** \brief
  *  Sets the given secret key to use.
  */
 void
-magic_endpoint_config_add_secret_key (
-    MagicEndpointConfig_t * config,
+endpoint_config_add_secret_key (
+    EndpointConfig_t * config,
     SecretKey_t * secret_key);
 
 /** \brief
- *  Generate a default magic endpoint configuration.
+ *  Generate a default endpoint configuration.
  *
- *  Must be freed using `magic_endpoing_config_free`.
+ *  Must be freed using `endpoint_config_free`.
  */
-MagicEndpointConfig_t
-magic_endpoint_config_default (void);
+EndpointConfig_t
+endpoint_config_default (void);
 
 /** \brief
- *  Frees the magic endpoint config.
+ *  Frees the iroh endpoint config.
  */
 void
-magic_endpoint_config_free (
-    MagicEndpointConfig_t config);
+endpoint_config_free (
+    EndpointConfig_t config);
 
 /** \brief
  *  Set the given value as the storage path for peer data.
  */
 void
-magic_endpoint_config_set_peers_data_path (
-    MagicEndpointConfig_t * config,
+endpoint_config_set_peers_data_path (
+    EndpointConfig_t * config,
     char const * path);
 
 typedef struct {
@@ -469,9 +461,9 @@ typedef struct NodeAddr {
  *
  *  Blocks until the connection is established.
  */
-MagicEndpointResult_t
-magic_endpoint_connect (
-    MagicEndpoint_t * const * ep,
+EndpointResult_t
+endpoint_connect (
+    Endpoint_t * const * ep,
     slice_ref_uint8_t alpn,
     NodeAddr_t node_addr,
     Connection_t * const * out);
@@ -479,24 +471,24 @@ magic_endpoint_connect (
 /** \brief
  *  Generate a default endpoint.
  *
- *  Must be freed using `magic_endpoint_free`.
+ *  Must be freed using `endpoint_free`.
  */
-MagicEndpoint_t *
-magic_endpoint_default (void);
+Endpoint_t *
+endpoint_default (void);
 
 /** \brief
- *  Frees the magic endpoint.
+ *  Frees the iroh endpoint.
  */
 void
-magic_endpoint_free (
-    MagicEndpoint_t * ep);
+endpoint_free (
+    Endpoint_t * ep);
 
 /** \brief
- *  Get the the node dialing information of this magic endpoint.
+ *  Get the the node dialing information of this iroh endpoint.
  */
-MagicEndpointResult_t
-magic_endpoint_my_addr (
-    MagicEndpoint_t * const * ep,
+EndpointResult_t
+endpoint_my_addr (
+    Endpoint_t * const * ep,
     NodeAddr_t * out);
 
 /** \brief
@@ -506,8 +498,16 @@ magic_endpoint_my_addr (
  *  Ref https://developer.android.com/training/monitoring-device-state/connectivity-status-type
  */
 void
-magic_endpoint_network_change (
-    MagicEndpoint_t * const * ep);
+endpoint_network_change (
+    Endpoint_t * const * ep);
+
+/** \brief
+ *  Enables tracing for iroh.
+ *
+ *  Log level can be controlled using the env variable `IROH_NET_LOG`.
+ */
+void
+iroh_enable_tracing (void);
 
 /** \brief
  *  Add the given direct addresses to the peer's addr info.
@@ -742,7 +742,7 @@ recv_stream_read (
  *  Blocks the current thread, until either the full stream has been read, or
  *  the timeout has expired.
  */
-MagicEndpointResult_t
+EndpointResult_t
 recv_stream_read_to_end_timeout (
     RecvStream_t * * stream,
     Vec_uint8_t * data,
@@ -839,7 +839,7 @@ send_stream_default (void);
  *
  *  Blocks the current thread.
  */
-MagicEndpointResult_t
+EndpointResult_t
 send_stream_finish (
     SendStream_t * stream);
 
@@ -862,7 +862,7 @@ send_stream_id (
  *
  *  Blocks the current thread.
  */
-MagicEndpointResult_t
+EndpointResult_t
 send_stream_write (
     SendStream_t * * stream,
     slice_ref_uint8_t data);
