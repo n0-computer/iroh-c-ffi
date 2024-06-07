@@ -19,7 +19,7 @@ required-features = ["headers"]  # Do not build unless generating headers.
 [dependencies]
 anyhow = "1.0.79"
 bytes = "1.5.0"
-iroh-net = "0.17"
+iroh-net = "0.18"
 once_cell = "1.19.0"
 quinn = { version = "0.10.5", package = "iroh-quinn" }
 safer-ffi = { version = "0.1.5" }
