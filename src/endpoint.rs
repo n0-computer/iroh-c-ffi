@@ -460,8 +460,8 @@ pub fn endpoint_accept(
             .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
         let alpn = conn.alpn().await?;
         let connection = conn.await?;
-        if alpn.as_bytes() != expected_alpn.as_slice() {
-            anyhow::bail!("unexpected alpn {}", alpn);
+        if &alpn != expected_alpn.as_slice() {
+            anyhow::bail!("unexpected alpn {:?}", std::str::from_utf8(&alpn));
         }
         out.connection.write().await.replace(connection);
         anyhow::Ok(())
@@ -505,7 +505,7 @@ pub fn endpoint_accept_any(
         let connection = conn.await?;
 
         alpn_out.with_rust_mut(|v| {
-            *v = alpn.as_bytes().to_vec();
+            *v = alpn;
         });
         out.connection.write().await.replace(connection);
         anyhow::Ok(())
@@ -547,7 +547,9 @@ pub fn endpoint_accept_any_cb(
     TOKIO_EXECUTOR.spawn(async move {
         // make the compiler happy
         let _ = &ctx_ptr;
-        async fn connect(ep: repr_c::Box<Endpoint>) -> anyhow::Result<(String, quinn::Connection)> {
+        async fn connect(
+            ep: repr_c::Box<Endpoint>,
+        ) -> anyhow::Result<(Vec<u8>, quinn::Connection)> {
             let mut conn = ep
                 .ep
                 .read()
@@ -564,7 +566,7 @@ pub fn endpoint_accept_any_cb(
 
         match connect(ep).await {
             Ok((alpn, connection)) => {
-                let alpn = alpn.as_bytes().to_vec().into();
+                let alpn = alpn.into();
                 let conn = Box::new(Connection {
                     connection: Some(connection).into(),
                 })
@@ -690,7 +692,7 @@ pub fn endpoint_connect(
 
 /// Get the the node dialing information of this iroh endpoint.
 #[ffi_export]
-pub fn endpoint_my_addr(ep: &repr_c::Box<Endpoint>, out: &mut NodeAddr) -> EndpointResult {
+pub fn endpoint_node_addr(ep: &repr_c::Box<Endpoint>, out: &mut NodeAddr) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         let addr = ep
             .ep
@@ -698,7 +700,7 @@ pub fn endpoint_my_addr(ep: &repr_c::Box<Endpoint>, out: &mut NodeAddr) -> Endpo
             .await
             .as_ref()
             .expect("endpoint not initialized")
-            .my_addr()
+            .node_addr()
             .await?;
         anyhow::Ok(addr)
     });
@@ -765,7 +767,7 @@ mod tests {
             assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
-            let res = endpoint_my_addr(&ep, &mut node_addr);
+            let res = endpoint_node_addr(&ep, &mut node_addr);
             assert_eq!(res, EndpointResult::Ok);
 
             s.send(node_addr).unwrap();
@@ -844,7 +846,7 @@ mod tests {
             assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
-            let res = endpoint_my_addr(&ep, &mut node_addr);
+            let res = endpoint_node_addr(&ep, &mut node_addr);
             assert_eq!(res, EndpointResult::Ok);
 
             s.send(node_addr).unwrap();
@@ -926,7 +928,7 @@ mod tests {
             assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
-            let res = endpoint_my_addr(&ep, &mut node_addr);
+            let res = endpoint_node_addr(&ep, &mut node_addr);
             assert_eq!(res, EndpointResult::Ok);
 
             s.send(node_addr).unwrap();
@@ -999,7 +1001,7 @@ mod tests {
             assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
-            let res = endpoint_my_addr(&ep, &mut node_addr);
+            let res = endpoint_node_addr(&ep, &mut node_addr);
             assert_eq!(res, EndpointResult::Ok);
 
             s.send(node_addr).unwrap();
@@ -1106,7 +1108,7 @@ mod tests {
             assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
-            let res = endpoint_my_addr(&ep, &mut node_addr);
+            let res = endpoint_node_addr(&ep, &mut node_addr);
             assert_eq!(res, EndpointResult::Ok);
 
             s.send(node_addr).unwrap();

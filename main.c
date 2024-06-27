@@ -25,14 +25,14 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   }
 
   // Print details
-  NodeAddr_t my_addr = node_addr_default();
-  int addr_res = endpoint_my_addr(&ep, &my_addr);
+  NodeAddr_t node_addr = node_addr_default();
+  int addr_res = endpoint_node_addr(&ep, &node_addr);
   if (addr_res != 0) {
     fprintf(stderr, "failed to get my address");
     return -1;
   }
-  char * node_id_str = public_key_as_base32(&my_addr.node_id);
-  char * relay_url_str = url_as_str(my_addr.relay_url);
+  char * node_id_str = public_key_as_base32(&node_addr.node_id);
+  char * relay_url_str = url_as_str(node_addr.relay_url);
   if (json_output) {
     printf("{ \"type\": \"server\", \"status\": \"listening\", \"node_id\": \"%s\", \"relay\": \"%s\", \"addrs\": [", node_id_str, relay_url_str);
   } else {
@@ -40,12 +40,12 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   }
 
   // iterate over the direct addresses
-  for (int i = 0; i < my_addr.direct_addresses.len; i++) {
-    SocketAddr_t const * addr = node_addr_direct_addresses_nth(&my_addr, i);
+  for (int i = 0; i < node_addr.direct_addresses.len; i++) {
+    SocketAddr_t const * addr = node_addr_direct_addresses_nth(&node_addr, i);
     char * socket_str = socket_addr_as_str(addr);
     if (json_output) {
       printf("\"%s\"", socket_str);
-      if (i < my_addr.direct_addresses.len - 1) {
+      if (i < node_addr.direct_addresses.len - 1) {
         printf(", ");
       }
     } else {
@@ -172,7 +172,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   recv_stream_free(recv_stream);
   rust_free_string(relay_url_str);
   rust_free_string(node_id_str);
-  node_addr_free(my_addr);
+  node_addr_free(node_addr);
   connection_free(conn);
   endpoint_free(ep);
 

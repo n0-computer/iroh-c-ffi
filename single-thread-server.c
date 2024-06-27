@@ -40,22 +40,22 @@ int main(int argc, char const *const argv[]) {
   }
 
   // Print details
-  NodeAddr_t my_addr = node_addr_default();
-  int addr_res = endpoint_my_addr(&ep, &my_addr);
+  NodeAddr_t node_addr = node_addr_default();
+  int addr_res = endpoint_node_addr(&ep, &node_addr);
   if (addr_res != 0) {
     fprintf(stderr, "faile to get my address");
     return -1;
   }
-  char *node_id_str = public_key_as_base32(&my_addr.node_id);
-  char *relay_url_str = url_as_str(my_addr.relay_url);
+  char *node_id_str = public_key_as_base32(&node_addr.node_id);
+  char *relay_url_str = url_as_str(node_addr.relay_url);
 
   printf("Listening on:\nNode Id: %s\nRelay: %s\nAddrs:\n", node_id_str,
          relay_url_str);
-  printf("Node Address is \n%s\n", node_addr_as_str(&my_addr));
+  printf("Node Address is \n%s\n", node_addr_as_str(&node_addr));
 
   // iterate over the direct addresses
-  for (int i = 0; i < my_addr.direct_addresses.len; i++) {
-    SocketAddr_t const *addr = node_addr_direct_addresses_nth(&my_addr, i);
+  for (int i = 0; i < node_addr.direct_addresses.len; i++) {
+    SocketAddr_t const *addr = node_addr_direct_addresses_nth(&node_addr, i);
     char *socket_str = socket_addr_as_str(addr);
     printf("  - %s\n", socket_str);
     rust_free_string(socket_str);
