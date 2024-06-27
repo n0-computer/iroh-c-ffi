@@ -484,14 +484,6 @@ endpoint_free (
     Endpoint_t * ep);
 
 /** \brief
- *  Get the the node dialing information of this iroh endpoint.
- */
-EndpointResult_t
-endpoint_my_addr (
-    Endpoint_t * const * ep,
-    NodeAddr_t * out);
-
-/** \brief
  *  Let the endpoint know that the underlying network conditions might have changed.
  *
  *  This really only needs to be called on android,
@@ -500,6 +492,14 @@ endpoint_my_addr (
 void
 endpoint_network_change (
     Endpoint_t * const * ep);
+
+/** \brief
+ *  Get the the node dialing information of this iroh endpoint.
+ */
+EndpointResult_t
+endpoint_node_addr (
+    Endpoint_t * const * ep,
+    NodeAddr_t * out);
 
 /** \brief
  *  Enables tracing for iroh.
