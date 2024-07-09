@@ -203,13 +203,15 @@ run_client (
   NodeAddr_t node_addr = node_addr_new(node_id);
 
   // parse relay url
-  Url_t * relay_url = url_default();
-  ret = url_from_string(relay_url_raw, &relay_url);
-  if (ret != 0) {
-    fprintf(stderr, "invalid relay url");
-    return -1;
+  if (relay_url_raw != NULL && strlen(relay_url_raw) > 0) {
+    Url_t * relay_url = url_default();
+    ret = url_from_string(relay_url_raw, &relay_url);
+    if (ret != 0) {
+      fprintf(stderr, "invalid relay url");
+      return -1;
+    }
+    node_addr_add_relay_url(&node_addr, relay_url);
   }
-  node_addr_add_relay_url(&node_addr, relay_url);
 
   // parse direct addrs
   for (int i = 0; i < addrs_len; i++) {
@@ -341,24 +343,32 @@ main (int argc, char const * const argv[])
 
   EndpointConfig_t config = endpoint_config_default();
   endpoint_config_add_alpn(&config, alpn_slice);
+  config.discovery_cfg = DISCOVERY_CONFIG_ALL;
 
   char const * data_path = argv[2];
   endpoint_config_set_peers_data_path(&config, data_path);
 
   // run server or client
   if (strcmp(argv[1], "client") == 0) {
-    if (argc < 6) {
+    if (argc < 4) {
       fprintf(stderr, "client must be supplied <data-path> <node id> <relay-url> <addr1> .. <addrn>");
       return -1;
     }
     char const * node_id = argv[3];
-    char const * relay_url = argv[4];
+    char const * relay_url = NULL;
+    char const **addrs = NULL;
+    int addrs_len = 0;
 
-    int addrs_len = argc - 5;
-    char const **addrs = malloc(addrs_len * sizeof(char const*));
+    if (argc > 4) {
+      relay_url = argv[4];
+    }
 
-    for (int i = 0; i < addrs_len; i++) {
-      addrs[i] = argv[5 + i];
+    if (argc > 5) {
+      addrs_len = argc - 5;
+      addrs = malloc(addrs_len * sizeof(char const*));
+      for (int i = 0; i < addrs_len; i++) {
+        addrs[i] = argv[5 + i];
+      }
     }
 
     int ret = run_client(&config, alpn_slice, node_id, relay_url, addrs, addrs_len);

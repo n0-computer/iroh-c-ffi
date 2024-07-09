@@ -313,6 +313,42 @@ enum RelayMode {
 RelayMode_t;
 
 /** \brief
+ *  Configuration for Discovery
+ */
+/** \remark Has the same ABI as `uint8_t` **/
+#ifdef DOXYGEN
+typedef
+#endif
+enum DiscoveryConfig {
+    /** \brief
+     *  Use no node discovery mechanism. The default.
+     */
+    DISCOVERY_CONFIG_NONE,
+    /** \brief
+     *  DNS Discovery service.
+     *
+     *  Allows for global node discovery. Requires access to the internet to work properly.
+     */
+    DISCOVERY_CONFIG_D_N_S,
+    /** \brief
+     *  LocalSwarm Discovery service.
+     *
+     *  Allows for local node discovery. Discovers other iroh nodes in your local network
+     *  If your local network does not have multicast abilities, creating a local swarm discovery service will log an error, but fail silently.
+     */
+    DISCOVERY_CONFIG_LOCAL_SWARM,
+    /** \brief
+     *  Use both DNS and LocalSwarm Discovery
+     *  If your local network does not have multicast abilities, creating a local swarm discovery service will log an error, but fail silently.
+     */
+    DISCOVERY_CONFIG_ALL,
+}
+#ifndef DOXYGEN
+; typedef uint8_t
+#endif
+DiscoveryConfig_t;
+
+/** \brief
  *  Same as [`Vec<T>`][`rust::Vec`], but with guaranteed `#[repr(C)]` layout
  */
 typedef struct Vec_Vec_uint8 {
@@ -337,6 +373,9 @@ typedef struct SecretKey SecretKey_t;
 typedef struct EndpointConfig {
     /** <No documentation available> */
     RelayMode_t relay_mode;
+
+    /** <No documentation available> */
+    DiscoveryConfig_t discovery_cfg;
 
     /** <No documentation available> */
     Vec_Vec_uint8_t alpn_protocols;
