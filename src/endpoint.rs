@@ -55,7 +55,7 @@ impl From<RelayMode> for iroh_net::relay::RelayMode {
 #[repr(u8)]
 #[derive(Debug, Copy, Clone)]
 pub enum DiscoveryConfig {
-    /// Use no node discovery mechanism.
+    /// Use no node discovery mechanism. The default.
     None,
     /// DNS Discovery service.
     ///
@@ -68,7 +68,7 @@ pub enum DiscoveryConfig {
     LocalSwarm,
     /// Use both DNS and LocalSwarm Discovery
     /// If your local network does not have multicast abilities, creating a local swarm discovery service will log an error, but fail silently.
-    Default,
+    All,
 }
 
 /// Frees the iroh endpoint config.
@@ -251,7 +251,7 @@ fn make_discovery_config(
         DiscoveryConfig::LocalSwarm => {
             make_local_swarm_discovery(secret_key.public()).map(|s| vec![s])
         }
-        DiscoveryConfig::Default => {
+        DiscoveryConfig::All => {
             let mut services = make_dns_discovery(&secret_key);
             if let Some(service) = make_local_swarm_discovery(secret_key.public()) {
                 services.push(service);
