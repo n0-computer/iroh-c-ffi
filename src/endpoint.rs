@@ -4,9 +4,15 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::Context;
+use iroh_net::discovery::Discovery;
+use iroh_net::discovery::{
+    dns::DnsDiscovery, local_swarm_discovery::LocalSwarmDiscovery, pkarr::PkarrPublisher,
+    ConcurrentDiscovery,
+};
+use iroh_net::NodeId;
 use safer_ffi::{prelude::*, slice, vec};
 use tokio::sync::RwLock;
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 
 use crate::addr::NodeAddr;
 use crate::key::{secret_key_generate, SecretKey};
@@ -18,6 +24,7 @@ use crate::util::TOKIO_EXECUTOR;
 #[repr(C)]
 pub struct EndpointConfig {
     pub relay_mode: RelayMode,
+    pub discovery_cfg: DiscoveryConfig,
     pub alpn_protocols: vec::Vec<vec::Vec<u8>>,
     pub secret_key: repr_c::Box<SecretKey>,
     pub peers_data_path: Option<char_p::Box>,
@@ -43,6 +50,27 @@ impl From<RelayMode> for iroh_net::relay::RelayMode {
     }
 }
 
+/// Configuration for Discovery
+#[derive_ReprC]
+#[repr(u8)]
+#[derive(Debug, Copy, Clone)]
+pub enum DiscoveryConfig {
+    /// Use no node discovery mechanism.
+    None,
+    /// DNS Discovery service.
+    ///
+    /// Allows for global node discovery. Requires access to the internet to work properly.
+    DNS,
+    /// LocalSwarm Discovery service.
+    ///
+    /// Allows for local node discovery. Discovers other iroh nodes in your local network
+    /// If your local network does not have multicast abilities, creating a local swarm discovery service will log an error, but fail silently.
+    LocalSwarm,
+    /// Use both DNS and LocalSwarm Discovery
+    /// If your local network does not have multicast abilities, creating a local swarm discovery service will log an error, but fail silently.
+    Default,
+}
+
 /// Frees the iroh endpoint config.
 #[ffi_export]
 pub fn endpoint_config_free(config: EndpointConfig) {
@@ -56,6 +84,7 @@ pub fn endpoint_config_free(config: EndpointConfig) {
 pub fn endpoint_config_default() -> EndpointConfig {
     EndpointConfig {
         relay_mode: RelayMode::Default,
+        discovery_cfg: DiscoveryConfig::None,
         alpn_protocols: vec::Vec::EMPTY,
         secret_key: secret_key_generate(),
         peers_data_path: None,
@@ -186,6 +215,12 @@ pub fn endpoint_bind(
             .alpns(alpn_protocols)
             .secret_key(config.secret_key.deref().into());
 
+        let discovery =
+            make_discovery_config(config.secret_key.deref().into(), config.discovery_cfg);
+        if let Some(discovery) = discovery {
+            builder = builder.discovery(Box::new(discovery));
+        }
+
         if let Some(ref path) = config.peers_data_path {
             let path: PathBuf = path.to_string().into();
             builder = builder.peers_data_path(path);
@@ -204,6 +239,44 @@ pub fn endpoint_bind(
             }
         }
     })
+}
+
+fn make_discovery_config(
+    secret_key: iroh_net::key::SecretKey,
+    discovery_config: DiscoveryConfig,
+) -> Option<iroh_net::discovery::ConcurrentDiscovery> {
+    let services = match discovery_config {
+        DiscoveryConfig::None => None,
+        DiscoveryConfig::DNS => Some(make_dns_discovery(&secret_key)),
+        DiscoveryConfig::LocalSwarm => {
+            make_local_swarm_discovery(secret_key.public()).map(|s| vec![s])
+        }
+        DiscoveryConfig::Default => {
+            let mut services = make_dns_discovery(&secret_key);
+            if let Some(service) = make_local_swarm_discovery(secret_key.public()) {
+                services.push(service);
+            }
+            Some(services)
+        }
+    };
+    services.map(ConcurrentDiscovery::from_services)
+}
+
+fn make_dns_discovery(secret_key: &iroh_net::key::SecretKey) -> Vec<Box<dyn Discovery>> {
+    vec![
+        Box::new(DnsDiscovery::n0_dns()),
+        Box::new(PkarrPublisher::n0_dns(secret_key.clone())),
+    ]
+}
+
+fn make_local_swarm_discovery(node_id: NodeId) -> Option<Box<dyn Discovery>> {
+    match LocalSwarmDiscovery::new(node_id) {
+        Err(e) => {
+            error!("unable to start LocalSwarmDiscovery service: {e:?}");
+            None
+        }
+        Ok(service) => Some(Box::new(service)),
+    }
 }
 
 /// Accepts a uni directional stream on this connection.
