@@ -1,6 +1,5 @@
 use std::ffi::c_void;
 use std::ops::Deref;
-use std::path::PathBuf;
 use std::time::Duration;
 
 use anyhow::Context;
@@ -27,7 +26,6 @@ pub struct EndpointConfig {
     pub discovery_cfg: DiscoveryConfig,
     pub alpn_protocols: vec::Vec<vec::Vec<u8>>,
     pub secret_key: repr_c::Box<SecretKey>,
-    pub peers_data_path: Option<char_p::Box>,
 }
 
 /// The options to configure relay.
@@ -87,7 +85,6 @@ pub fn endpoint_config_default() -> EndpointConfig {
         discovery_cfg: DiscoveryConfig::None,
         alpn_protocols: vec::Vec::EMPTY,
         secret_key: secret_key_generate(),
-        peers_data_path: None,
     }
 }
 
@@ -97,12 +94,6 @@ pub fn endpoint_config_add_alpn(config: &mut EndpointConfig, alpn: slice::slice_
     config.alpn_protocols.with_rust_mut(|alpns| {
         alpns.push(alpn.to_vec().into());
     });
-}
-
-/// Set the given value as the storage path for peer data.
-#[ffi_export]
-pub fn endpoint_config_set_peers_data_path(config: &mut EndpointConfig, path: char_p::Ref<'_>) {
-    config.peers_data_path = Some(path.to_owned());
 }
 
 /// Sets the given secret key to use.
@@ -219,11 +210,6 @@ pub fn endpoint_bind(
             make_discovery_config(config.secret_key.deref().into(), config.discovery_cfg);
         if let Some(discovery) = discovery {
             builder = builder.discovery(Box::new(discovery));
-        }
-
-        if let Some(ref path) = config.peers_data_path {
-            let path: PathBuf = path.to_string().into();
-            builder = builder.peers_data_path(path);
         }
 
         let builder = builder.bind(port).await;
