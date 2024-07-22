@@ -345,13 +345,10 @@ main (int argc, char const * const argv[])
   endpoint_config_add_alpn(&config, alpn_slice);
   config.discovery_cfg = DISCOVERY_CONFIG_ALL;
 
-  char const * data_path = argv[2];
-  endpoint_config_set_peers_data_path(&config, data_path);
-
   // run server or client
   if (strcmp(argv[1], "client") == 0) {
-    if (argc < 4) {
-      fprintf(stderr, "client must be supplied <data-path> <node id> <relay-url> <addr1> .. <addrn>");
+    if (argc < 3) {
+      fprintf(stderr, "client must be supplied <node id> <relay-url> <addr1> .. <addrn>");
       return -1;
     }
     char const * node_id = argv[3];

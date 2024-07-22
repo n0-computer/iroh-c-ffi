@@ -382,9 +382,6 @@ typedef struct EndpointConfig {
 
     /** <No documentation available> */
     SecretKey_t * secret_key;
-
-    /** <No documentation available> */
-    char * peers_data_path;
 } EndpointConfig_t;
 
 /** \brief
@@ -430,14 +427,6 @@ endpoint_config_default (void);
 void
 endpoint_config_free (
     EndpointConfig_t config);
-
-/** \brief
- *  Set the given value as the storage path for peer data.
- */
-void
-endpoint_config_set_peers_data_path (
-    EndpointConfig_t * config,
-    char const * path);
 
 typedef struct {
     uint8_t idx[32];
