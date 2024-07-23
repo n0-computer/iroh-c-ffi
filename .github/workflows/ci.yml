@@ -218,6 +218,51 @@ jobs:
                     exit 1
                 }
                 Write-Output "Success"
+    
+    android_build:
+        name: Android Build Only
+        timeout-minutes: 30
+        # runs-on: ubuntu-latest
+        runs-on: [self-hosted, linux, X64]
+        strategy:
+          fail-fast: false
+          matrix:
+            target:
+              - aarch64-linux-android
+              - armv7-linux-androideabi
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Set up Rust
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                target: ${{ matrix.target }}
+            - name: Install rustup target
+              run: rustup target add ${{ matrix.target }}
+
+            - name: Setup Java
+              uses: actions/setup-java@v4
+              with:
+                distribution: 'temurin'
+                java-version: '17'
+            
+            - name: Setup Android SDK
+              uses: android-actions/setup-android@v3
+
+            - name: Setup Android NDK
+              uses: arqu/setup-ndk@main
+              id: setup-ndk
+              with:
+                ndk-version: r23
+                add-to-path: true
+
+            - name: Build
+              env:
+                ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+              run: | 
+                cargo install cargo-ndk
+                cargo ndk --target ${{ matrix.target }} build
 
     cross:
         timeout-minutes: 30
@@ -228,8 +273,6 @@ jobs:
             matrix:
               target:
                 - i686-unknown-linux-gnu
-                - armv7-linux-androideabi
-                - aarch64-linux-android
         steps:
             - name: Checkout
               uses: actions/checkout@v4
