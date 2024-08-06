@@ -385,7 +385,7 @@ main (int argc, char const * const argv[])
 
   } else if (strcmp(argv[1], "server") == 0) {
     bool json_output = false;
-    if (argc > 3 && strcmp(argv[3], "--json") == 0) {
+    if (argc > 3 && strcmp(argv[2], "--json") == 0) {
       json_output = true;
     }
     int ret = run_server(&config, alpn_slice, json_output);
@@ -393,7 +393,7 @@ main (int argc, char const * const argv[])
       return ret;
     }
   } else {
-    fprintf(stderr, "invalid arg: %s\n", argv[2]);
+    fprintf(stderr, "invalid arg: %s\n", argv[1]);
     return -1;
   }
 
