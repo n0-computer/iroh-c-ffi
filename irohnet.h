@@ -157,6 +157,13 @@ connection_open_uni (
     SendStream_t * * out);
 
 /** \brief
+ *  Returns the ratio of lost packets to sent packets.
+ */
+double
+connection_packet_loss (
+    Connection_t * const * conn);
+
+/** \brief
  *  Same as [`Vec<T>`][`rust::Vec`], but with guaranteed `#[repr(C)]` layout
  */
 typedef struct Vec_uint8 {
