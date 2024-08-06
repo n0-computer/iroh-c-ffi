@@ -64,7 +64,7 @@ jobs:
               env:
                 LD_LIBRARY_PATH: target/release
               run: |
-                ./main server server.data --json > server_output.json &
+                ./main server --json > server_output.json &
                 # Wait for the server to start
                 sleep 3
                 # Read the second line of the file
@@ -84,7 +84,7 @@ jobs:
                 node_id=$(echo $json_output | jq -r '.node_id')
                 relay=$(echo $json_output | jq -r '.relay')
                 addrs=$(echo $json_output | jq -r '.addrs[]')
-                ./main client client.data $node_id $relay ${addrs[@]}
+                ./main client $node_id $relay ${addrs[@]}
                 sleep 1
 
                 # Read the 3rd line of the file
