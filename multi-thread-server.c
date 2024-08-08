@@ -65,6 +65,9 @@ int run_server(Endpoint_t *ep, slice_ref_uint8_t alpn_slice, bool json_output)
         // print rtt
         uint64_t rtt = connection_rtt(&conn);
         printf("Estimated RTT: %llu ms\n", rtt);
+        // print packet loss, multiple by 100 to get the percentage
+        float packet_loss = connection_packet_loss(&conn) * 100;
+        printf("Estimated packet loss: %0.2f%%\n", packet_loss);
     }
 
     fflush(stdout);

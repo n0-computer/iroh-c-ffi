@@ -99,6 +99,9 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
     uint64_t rtt = connection_rtt(&conn);
     printf("Estimated RTT: %llu ms\n", rtt);
 
+    // print packet loss, multiple by 100 to get the percentage
+    double packet_loss = connection_packet_loss(&conn) * 100;
+    printf("Estimated packet loss: %0.2f%%\n", packet_loss);
   }
 
   fflush(stdout);
@@ -270,6 +273,10 @@ run_client (
   uint64_t rtt = connection_rtt(&conn);
   printf("Estimated RTT: %llu ms\n", rtt);
 
+  // print packet loss, multiple by 100 to get the percentage
+  double packet_loss = connection_packet_loss(&conn) * 100;
+  printf("Estimated packet loss: %0.2f%%\n", packet_loss);
+
   // Open bidirectional stream
   printf("open_bi\n");
   send_stream = send_stream_default();
@@ -330,8 +337,8 @@ main (int argc, char const * const argv[])
 {
   iroh_enable_tracing();
 
-  if (argc < 3) {
-    fprintf(stderr, "Usage: must supply at least client or server\n");
+  if (argc < 2) {
+    fprintf(stderr, "Usage: must supply at least 'client' or 'server'\n");
     return -1;
   }
 

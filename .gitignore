@@ -2,4 +2,8 @@
 Cargo.lock
 *.a
 *.o
+# executables
 main
+multi-thread-client
+multi-thread-server
+single-thread-server
