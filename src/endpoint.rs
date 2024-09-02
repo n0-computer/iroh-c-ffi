@@ -857,6 +857,7 @@ mod tests {
 
             let mut recv_stream = recv_stream_default();
             let accept_res = connection_accept_uni(&conn, &mut recv_stream);
+            println!("[s] connection_accept_uni accept_res: {accept_res:?}");
             assert_eq!(accept_res, EndpointResult::Ok);
 
             println!("[s] reading");
@@ -894,7 +895,9 @@ mod tests {
             let send_res = send_stream_write(&mut send_stream, b"hello world"[..].into());
             assert_eq!(send_res, EndpointResult::Ok);
 
+            println!("[c] finishing");
             let finish_res = send_stream_finish(send_stream);
+            println!("[c] finished");
             assert_eq!(finish_res, EndpointResult::Ok);
         });
 
@@ -932,6 +935,7 @@ mod tests {
             println!("[s] accepting conn");
             let mut conn = connection_default();
             let accept_res = endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            println!("[s] accept_res: {accept_res:?}");
             assert_eq!(accept_res, EndpointResult::Ok);
 
             println!("[s] opening uni");
