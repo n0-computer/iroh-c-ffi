@@ -531,7 +531,8 @@ pub fn endpoint_accept(
             .expect("endpoint not initalized")
             .accept()
             .await
-            .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
+            .ok_or_else(|| anyhow::anyhow!("connection closed"))?
+            .accept()?;
         let alpn = conn.alpn().await?;
         let connection = conn.await?;
         if &alpn != expected_alpn.as_slice() {
@@ -574,7 +575,8 @@ pub fn endpoint_accept_any(
             .expect("endpoint not initalized")
             .accept()
             .await
-            .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
+            .ok_or_else(|| anyhow::anyhow!("connection closed"))?
+            .accept()?;
         let alpn = conn.alpn().await?;
         let connection = conn.await?;
 
@@ -632,7 +634,8 @@ pub fn endpoint_accept_any_cb(
                 .expect("endpoint not initalized")
                 .accept()
                 .await
-                .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
+                .ok_or_else(|| anyhow::anyhow!("connection closed"))?
+                .accept()?;
             let alpn = conn.alpn().await?;
             let connection = conn.await?;
             Ok((alpn, connection))

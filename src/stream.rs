@@ -168,7 +168,6 @@ pub fn send_stream_finish(mut stream: repr_c::Box<SendStream>) -> EndpointResult
             .as_mut()
             .expect("sendstream not initialized")
             .finish()
-            .await
     });
 
     match res {
