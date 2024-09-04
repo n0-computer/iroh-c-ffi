@@ -9,6 +9,7 @@ use iroh_net::discovery::{
     ConcurrentDiscovery,
 };
 use iroh_net::NodeId;
+use quinn::{ConnectionError, VarInt};
 use safer_ffi::{prelude::*, slice, vec};
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
@@ -17,6 +18,8 @@ use crate::addr::NodeAddr;
 use crate::key::{secret_key_generate, SecretKey};
 use crate::stream::{RecvStream, SendStream};
 use crate::util::TOKIO_EXECUTOR;
+
+const CLOSE_CODE: VarInt = VarInt::from_u32(0);
 
 /// Configuration options for the Endpoint.
 #[derive_ReprC]
@@ -174,6 +177,8 @@ pub enum EndpointResult {
     ReadError,
     /// Timeout elapsed.
     Timeout,
+    /// Error while closing.
+    CloseError,
 }
 
 /// Attempts to bind the endpoint to the given port.
@@ -733,6 +738,44 @@ pub fn connection_open_bi(
     }
 }
 
+/// Close a connection
+#[ffi_export]
+pub fn connection_close(conn: &repr_c::Box<Connection>) {
+    TOKIO_EXECUTOR.block_on(async move {
+        conn.connection
+            .read()
+            .await
+            .as_ref()
+            .expect("connection not initialized")
+            .close(CLOSE_CODE, b"finished")
+    });
+}
+
+/// Wait for the connection to be closed.
+///
+/// Blocks the current thread.
+#[ffi_export]
+pub fn connection_closed(conn: &repr_c::Box<Connection>) -> EndpointResult {
+    let res = TOKIO_EXECUTOR.block_on(async move {
+        conn.connection
+            .read()
+            .await
+            .as_ref()
+            .expect("connection not initialized")
+            .closed()
+            .await
+    });
+    match res {
+        ConnectionError::LocallyClosed | ConnectionError::ApplicationClosed(_) => {
+            EndpointResult::Ok
+        }
+        _ => {
+            dbg!(res);
+            EndpointResult::CloseError
+        }
+    }
+}
+
 /// Connects to the given node.
 ///
 /// Blocks until the connection is established.
@@ -850,11 +893,12 @@ mod tests {
             s.send(node_addr).unwrap();
 
             // accept connection
-            println!("[s] accepting conn");
+            println!("[s] endpoint accept");
             let mut conn = connection_default();
             let accept_res = endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
             assert_eq!(accept_res, EndpointResult::Ok);
 
+            println!("[s] connection accept uni");
             let mut recv_stream = recv_stream_default();
             let accept_res = connection_accept_uni(&conn, &mut recv_stream);
             println!("[s] connection_accept_uni accept_res: {accept_res:?}");
@@ -869,6 +913,8 @@ mod tests {
                 std::str::from_utf8(&recv_buffer[..read_res as usize]).unwrap(),
                 "hello world"
             );
+            println!("[s] closing connection");
+            connection_close(&conn);
         });
 
         // setup client
@@ -887,6 +933,7 @@ mod tests {
             let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
             assert_eq!(connect_res, EndpointResult::Ok);
 
+            println!("[c] connection open uni");
             let mut send_stream = send_stream_default();
             let open_res = connection_open_uni(&conn, &mut send_stream);
             assert_eq!(open_res, EndpointResult::Ok);
@@ -895,10 +942,11 @@ mod tests {
             let send_res = send_stream_write(&mut send_stream, b"hello world"[..].into());
             assert_eq!(send_res, EndpointResult::Ok);
 
-            println!("[c] finishing");
-            let finish_res = send_stream_finish(send_stream);
-            println!("[c] finished");
-            assert_eq!(finish_res, EndpointResult::Ok);
+            println!("[c] waiting for recv to close the connection");
+
+            let closed_res = connection_closed(&conn);
+            println!("[c] closed");
+            assert_eq!(closed_res, EndpointResult::Ok);
         });
 
         server_thread.join().unwrap();
@@ -948,8 +996,10 @@ mod tests {
             let send_res = send_stream_write(&mut send_stream, b"hello world"[..].into());
             assert_eq!(send_res, EndpointResult::Ok);
 
-            let finish_res = send_stream_finish(send_stream);
-            assert_eq!(finish_res, EndpointResult::Ok);
+            println!("[s] waiting for recv side to close the connection");
+            let closed_res = connection_closed(&conn);
+            assert_eq!(closed_res, EndpointResult::Ok);
+            println!("[s] closed");
         });
 
         // setup client
@@ -981,6 +1031,8 @@ mod tests {
                 std::str::from_utf8(&recv_buffer[..read_res as usize]).unwrap(),
                 "hello world"
             );
+            println!("[c] closing connection");
+            connection_close(&conn);
         });
 
         server_thread.join().unwrap();

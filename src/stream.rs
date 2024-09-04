@@ -158,8 +158,6 @@ pub fn send_stream_write(
 /// Finish the sending on this stream.
 ///
 /// Consumes the send stream, no need to free it afterwards.
-///
-/// Blocks the current thread.
 #[ffi_export]
 pub fn send_stream_finish(mut stream: repr_c::Box<SendStream>) -> EndpointResult {
     let res = stream
