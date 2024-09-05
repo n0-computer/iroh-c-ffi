@@ -88,6 +88,20 @@ enum EndpointResult {
      *  Timeout elapsed.
      */
     ENDPOINT_RESULT_TIMEOUT,
+    /** \brief
+     *  Error while closing.
+     */
+    ENDPOINT_RESULT_CLOSE_ERROR,
+    /** \brief
+     *  Failed to accept an incoming connection.
+     *
+     *  This occurs before the handshake is even attempted.
+     *
+     *  Likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
+     *
+     *  It is common to simply log this error and move on.
+     */
+    ENDPOINT_RESULT_INCOMING_ERROR,
 }
 #ifndef DOXYGEN
 ; typedef uint8_t
@@ -114,6 +128,26 @@ EndpointResult_t
 connection_accept_uni (
     Connection_t * const * conn,
     RecvStream_t * * out);
+
+/** \brief
+ *  Close a connection
+ *
+ *  Consumes the connection, no need to free it afterwards.
+ */
+void
+connection_close (
+    Connection_t * conn);
+
+/** \brief
+ *  Wait for the connection to be closed.
+ *
+ *  Blocks the current thread.
+ *
+ *  Consumes the connection, no need to free it afterwards.
+ */
+EndpointResult_t
+connection_closed (
+    Connection_t * conn);
 
 /** \brief
  *  Result must be freed using `connection_free`.
@@ -871,8 +905,6 @@ send_stream_default (void);
  *  Finish the sending on this stream.
  *
  *  Consumes the send stream, no need to free it afterwards.
- *
- *  Blocks the current thread.
  */
 EndpointResult_t
 send_stream_finish (

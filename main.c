@@ -167,6 +167,14 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
     return -1;
   }
 
+  // wait for the receiving side to close the connection
+  printf("waiting for connection to close");
+  ret = connection_closed(conn);
+  if (ret != 0) {
+    fprintf(stderr, "failed to close connection cleanly\n");
+    return -1;
+  }
+
   fflush(stdout);
 
   // Cleanup
@@ -176,7 +184,6 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   rust_free_string(relay_url_str);
   rust_free_string(node_id_str);
   node_addr_free(node_addr);
-  connection_free(conn);
   endpoint_free(ep);
 
   return 0;
@@ -323,12 +330,15 @@ run_client (
     return -1;
   }
 
+  // indicate to the server that you want to close the connection
+  printf("closing connection\n");
+  connection_close(conn);
+  printf("connection closed");
+
   // cleanup
   free(recv_str);
   free(recv_buffer);
   recv_stream_free(recv_stream);
-  connection_free(conn);
-
   return 0;
 }
 
