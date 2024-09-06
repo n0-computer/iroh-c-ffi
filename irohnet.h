@@ -295,6 +295,9 @@ typedef struct Endpoint Endpoint_t;
  *  Accept a new connection on this endpoint.
  *
  *  Blocks the current thread until a connection is established.
+ *
+ *  An [`EndpointResult::IncomingError`] occurring here is likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
+ *  It is not considered fatal and is common to simply log and ignore.
  */
 EndpointResult_t
 endpoint_accept (
@@ -308,6 +311,9 @@ endpoint_accept (
  *  Does not prespecify the ALPN, and but rather returns it.
  *
  *  Blocks the current thread until a connection is established.
+ *
+ *  An [`EndpointResult::IncomingError`] occurring here is likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
+ *  It is not considered fatal and is common to simply log and ignore.
  */
 EndpointResult_t
 endpoint_accept_any (
@@ -324,6 +330,9 @@ endpoint_accept_any (
  *  when an error occurs.
  *  `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
  *  called from another thread.
+ *
+ *  An [`EndpointResult::IncomingError`] occurring here is likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
+ *  It is not considered fatal and is common to simply log and ignore.
  */
 void
 endpoint_accept_any_cb (
