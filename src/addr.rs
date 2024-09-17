@@ -157,6 +157,46 @@ impl From<std::net::SocketAddr> for SocketAddr {
     }
 }
 
+/// Represents an IPv4 address, including a port number.
+#[derive_ReprC]
+#[repr(opaque)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SocketAddrV4 {
+    addr: std::net::SocketAddrV4,
+}
+
+impl From<std::net::SocketAddrV4> for SocketAddrV4 {
+    fn from(addr: std::net::SocketAddrV4) -> Self {
+        Self { addr }
+    }
+}
+
+impl From<&SocketAddrV4> for std::net::SocketAddrV4 {
+    fn from(value: &SocketAddrV4) -> Self {
+        value.addr
+    }
+}
+
+/// Represents an IPv6 address, including a port number.
+#[derive_ReprC]
+#[repr(opaque)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SocketAddrV6 {
+    addr: std::net::SocketAddrV6,
+}
+
+impl From<std::net::SocketAddrV6> for SocketAddrV6 {
+    fn from(addr: std::net::SocketAddrV6) -> Self {
+        Self { addr }
+    }
+}
+
+impl From<&SocketAddrV6> for std::net::SocketAddrV6 {
+    fn from(value: &SocketAddrV6) -> Self {
+        value.addr
+    }
+}
+
 /// Formats the given socket addr as a string
 ///
 /// Result must be freed with `rust_free_string`
@@ -188,6 +228,78 @@ pub fn socket_addr_from_string(
     out: &mut repr_c::Box<SocketAddr>,
 ) -> AddrResult {
     match input.to_str().parse::<std::net::SocketAddr>() {
+        Ok(addr) => {
+            out.addr = addr;
+            AddrResult::Ok
+        }
+        Err(_err) => AddrResult::InvalidSocketAddr,
+    }
+}
+
+/// Formats the given socket addr as a string
+///
+/// Result must be freed with `rust_free_string`
+#[ffi_export]
+pub fn socket_addr_v4_as_str(addr: &SocketAddrV4) -> char_p::Box {
+    addr.addr.to_string().try_into().unwrap()
+}
+
+#[ffi_export]
+pub fn socket_addr_v4_default() -> repr_c::Box<SocketAddrV4> {
+    Box::new(SocketAddrV4 {
+        addr: std::net::SocketAddrV4::new(std::net::Ipv4Addr::UNSPECIFIED, 0),
+    })
+    .into()
+}
+
+#[ffi_export]
+pub fn socket_addr_v4_free(addr: repr_c::Box<SocketAddrV4>) {
+    drop(addr);
+}
+
+/// Try to parse a url from a string.
+#[ffi_export]
+pub fn socket_addr_v4_from_string(
+    input: char_p::Ref<'_>,
+    out: &mut repr_c::Box<SocketAddrV4>,
+) -> AddrResult {
+    match input.to_str().parse::<std::net::SocketAddrV4>() {
+        Ok(addr) => {
+            out.addr = addr;
+            AddrResult::Ok
+        }
+        Err(_err) => AddrResult::InvalidSocketAddr,
+    }
+}
+
+/// Formats the given socket addr as a string
+///
+/// Result must be freed with `rust_free_string`
+#[ffi_export]
+pub fn socket_addr_v6_as_str(addr: &SocketAddrV6) -> char_p::Box {
+    addr.addr.to_string().try_into().unwrap()
+}
+
+#[ffi_export]
+pub fn socket_addr_v6_default() -> repr_c::Box<SocketAddrV6> {
+    Box::new(SocketAddrV6 {
+        addr: std::net::SocketAddrV6::new(std::net::Ipv6Addr::UNSPECIFIED, 0, 0, 0),
+    })
+    .into()
+}
+
+#[ffi_export]
+pub fn socket_addr_v6_free(addr: repr_c::Box<SocketAddrV6>) {
+    drop(addr);
+}
+
+/// Try to parse a url from a string.
+#[ffi_export]
+pub fn socket_addr_v6_from_string(
+    input: char_p::Ref<'_>,
+    out: &mut repr_c::Box<SocketAddrV6>,
+) -> AddrResult {
+    match input.to_str().parse::<std::net::SocketAddrV6>() {
         Ok(addr) => {
             out.addr = addr;
             AddrResult::Ok

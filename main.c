@@ -18,7 +18,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
 
   // Bind
   Endpoint_t * ep = endpoint_default();
-  int bind_res = endpoint_bind(config, 0, &ep);
+  int bind_res = endpoint_bind(config, NULL, NULL, &ep);
   if (bind_res != 0) {
     fprintf(stderr, "failed to bind server\n");
     return -1;
@@ -236,7 +236,7 @@ run_client (
 
   // setup endpoint
   Endpoint_t * ep = endpoint_default();
-  int bind_res = endpoint_bind(config, 0, &ep);
+  int bind_res = endpoint_bind(config, NULL, NULL, &ep);
   if (bind_res != 0) {
     fprintf(stderr, "failed to bind\n");
     return -1;
@@ -368,20 +368,20 @@ main (int argc, char const * const argv[])
       fprintf(stderr, "client must be supplied <node id> <relay-url> <addr1> .. <addrn>");
       return -1;
     }
-    char const * node_id = argv[3];
+    char const * node_id = argv[2];
     char const * relay_url = NULL;
     char const **addrs = NULL;
     int addrs_len = 0;
 
-    if (argc > 4) {
-      relay_url = argv[4];
+    if (argc > 3) {
+      relay_url = argv[3];
     }
 
-    if (argc > 5) {
-      addrs_len = argc - 5;
+    if (argc > 4) {
+      addrs_len = argc - 4;
       addrs = malloc(addrs_len * sizeof(char const*));
       for (int i = 0; i < addrs_len; i++) {
-        addrs[i] = argv[5 + i];
+        addrs[i] = argv[4 + i];
       }
     }
 
@@ -395,7 +395,7 @@ main (int argc, char const * const argv[])
 
   } else if (strcmp(argv[1], "server") == 0) {
     bool json_output = false;
-    if (argc > 3 && strcmp(argv[3], "--json") == 0) {
+    if (argc > 2 && strcmp(argv[2], "--json") == 0) {
       json_output = true;
     }
     int ret = run_server(&config, alpn_slice, json_output);
