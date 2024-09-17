@@ -177,7 +177,6 @@ impl From<&SocketAddrV4> for std::net::SocketAddrV4 {
     }
 }
 
-
 /// Represents an IPv6 address, including a port number.
 #[derive_ReprC]
 #[repr(opaque)]
@@ -248,10 +247,7 @@ pub fn socket_addr_v4_as_str(addr: &SocketAddrV4) -> char_p::Box {
 #[ffi_export]
 pub fn socket_addr_v4_default() -> repr_c::Box<SocketAddrV4> {
     Box::new(SocketAddrV4 {
-        addr: std::net::SocketAddrV4::new(
-            std::net::Ipv4Addr::UNSPECIFIED,
-            0,
-        ),
+        addr: std::net::SocketAddrV4::new(std::net::Ipv4Addr::UNSPECIFIED, 0),
     })
     .into()
 }
@@ -287,12 +283,7 @@ pub fn socket_addr_v6_as_str(addr: &SocketAddrV6) -> char_p::Box {
 #[ffi_export]
 pub fn socket_addr_v6_default() -> repr_c::Box<SocketAddrV6> {
     Box::new(SocketAddrV6 {
-        addr: std::net::SocketAddrV6::new(
-            std::net::Ipv6Addr::UNSPECIFIED,
-            0,
-            0,
-            0,
-        ),
+        addr: std::net::SocketAddrV6::new(std::net::Ipv6Addr::UNSPECIFIED, 0, 0, 0),
     })
     .into()
 }
