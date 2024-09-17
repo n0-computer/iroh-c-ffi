@@ -158,18 +158,13 @@ pub fn send_stream_write(
 /// Finish the sending on this stream.
 ///
 /// Consumes the send stream, no need to free it afterwards.
-///
-/// Blocks the current thread.
 #[ffi_export]
 pub fn send_stream_finish(mut stream: repr_c::Box<SendStream>) -> EndpointResult {
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        stream
-            .stream
-            .as_mut()
-            .expect("sendstream not initialized")
-            .finish()
-            .await
-    });
+    let res = stream
+        .stream
+        .as_mut()
+        .expect("sendstream not initialized")
+        .finish();
 
     match res {
         Ok(()) => EndpointResult::Ok,
