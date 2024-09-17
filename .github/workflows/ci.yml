@@ -85,7 +85,7 @@ jobs:
                 relay=$(echo $json_output | jq -r '.relay')
                 addrs=$(echo $json_output | jq -r '.addrs[]')
                 ./main client $node_id $relay ${addrs[@]}
-                sleep 1
+                sleep 3
 
                 # Read the 3rd line of the file
                 last_line=$(sed -n '3p' server_output.json)
@@ -199,7 +199,7 @@ jobs:
                 $relay = $json_output.relay
                 $addrs = $json_output.addrs
                 & "./main" "client" $node_id $relay $addrs
-                Start-Sleep -Seconds 1
+                Start-Sleep -Seconds 3
 
                 # Read the 3rd line of the file
                 $last_line = Get-Content server_output.json | Select-Object -Index 2
