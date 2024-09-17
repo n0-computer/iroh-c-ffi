@@ -180,7 +180,7 @@ jobs:
                 LD_LIBRARY_PATH: target/release
             - name: test run
               run: |
-                Start-Process -NoNewWindow -FilePath "./main.exe" -ArgumentList "server", "server.data", "--json" -RedirectStandardOutput "server_output.json"
+                Start-Process -NoNewWindow -FilePath "./main.exe" -ArgumentList "server", "--json" -RedirectStandardOutput "server_output.json"
                 # Wait for the server to start
                 Start-Sleep -Seconds 3
                 # Read the second line of the file
@@ -198,7 +198,7 @@ jobs:
                 $node_id = $json_output.node_id
                 $relay = $json_output.relay
                 $addrs = $json_output.addrs
-                & "./main" "client" "client.data" $node_id $relay $addrs
+                & "./main" "client" $node_id $relay $addrs
                 Start-Sleep -Seconds 1
 
                 # Read the 3rd line of the file
