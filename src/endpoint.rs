@@ -9,6 +9,7 @@ use iroh_net::discovery::{
     ConcurrentDiscovery,
 };
 use iroh_net::NodeId;
+use quinn::{ConnectionError, VarInt};
 use safer_ffi::{prelude::*, slice, vec};
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
@@ -17,6 +18,8 @@ use crate::addr::NodeAddr;
 use crate::key::{secret_key_generate, SecretKey};
 use crate::stream::{RecvStream, SendStream};
 use crate::util::TOKIO_EXECUTOR;
+
+const CLOSE_CODE: VarInt = VarInt::from_u32(0);
 
 /// Configuration options for the Endpoint.
 #[derive_ReprC]
@@ -145,6 +148,38 @@ pub struct Endpoint {
     ep: RwLock<Option<iroh_net::endpoint::Endpoint>>,
 }
 
+#[derive(Debug)]
+enum AcceptError {
+    ConnectionClosed(anyhow::Error),
+    IncomingError(anyhow::Error),
+    ALPNError(anyhow::Error),
+    ConnectionError(anyhow::Error),
+}
+
+impl Into<EndpointResult> for AcceptError {
+    fn into(self) -> EndpointResult {
+        match self {
+            AcceptError::ConnectionClosed(_)
+            | AcceptError::ALPNError(_)
+            | AcceptError::ConnectionError(_) => EndpointResult::AcceptFailed,
+            AcceptError::IncomingError(_) => EndpointResult::IncomingError,
+        }
+    }
+}
+
+impl std::fmt::Display for AcceptError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AcceptError::ConnectionClosed(err)
+            | AcceptError::IncomingError(err)
+            | AcceptError::ALPNError(err)
+            | AcceptError::ConnectionError(err) => {
+                write!(f, "{err:?}")
+            }
+        }
+    }
+}
+
 /// Result of dealing with a iroh endpoint.
 #[derive_ReprC]
 #[repr(u8)]
@@ -174,6 +209,16 @@ pub enum EndpointResult {
     ReadError,
     /// Timeout elapsed.
     Timeout,
+    /// Error while closing.
+    CloseError,
+    /// Failed to accept an incoming connection.
+    ///
+    /// This occurs before the handshake is even attempted.
+    ///
+    /// Likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
+    ///
+    /// It is common to simply log this error and move on.
+    IncomingError,
 }
 
 /// Attempts to bind the endpoint to the given port.
@@ -516,6 +561,9 @@ pub fn connection_max_datagram_size(connection: &repr_c::Box<Connection>) -> usi
 /// Accept a new connection on this endpoint.
 ///
 /// Blocks the current thread until a connection is established.
+///
+/// An [`EndpointResult::IncomingError`] occurring here is likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
+/// It is not considered fatal and is common to simply log and ignore.
 #[ffi_export]
 pub fn endpoint_accept(
     ep: &repr_c::Box<Endpoint>,
@@ -523,35 +571,48 @@ pub fn endpoint_accept(
     out: &repr_c::Box<Connection>,
 ) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
-        let mut conn = ep
-            .ep
-            .read()
-            .await
-            .as_ref()
-            .expect("endpoint not initalized")
-            .accept()
-            .await
-            .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
-        let alpn = conn.alpn().await?;
-        let connection = conn.await?;
+        let (alpn, connection) = accept_conn(ep).await?;
         if &alpn != expected_alpn.as_slice() {
-            anyhow::bail!("unexpected alpn {:?}", std::str::from_utf8(&alpn));
+            let err = anyhow::anyhow!("unexpected alpn {:?}", std::str::from_utf8(&alpn));
+            return Err(AcceptError::ALPNError(err));
         }
         out.connection.write().await.replace(connection);
-        anyhow::Ok(())
+        Ok(())
     });
 
     match res {
         Ok(()) => EndpointResult::Ok,
         Err(err) => {
             warn!(
-                "accept failed: {:?}: {:?}",
+                "accept failed: {:?}: {err}",
                 std::str::from_utf8(expected_alpn.as_ref()),
-                err
             );
-            EndpointResult::AcceptFailed
+            err.into()
         }
     }
+}
+
+async fn accept_conn(
+    ep: &repr_c::Box<Endpoint>,
+) -> Result<(Vec<u8>, iroh_net::endpoint::Connection), AcceptError> {
+    let mut conn = ep
+        .ep
+        .read()
+        .await
+        .as_ref()
+        .expect("endpoint not initalized")
+        .accept()
+        .await
+        .ok_or(AcceptError::ConnectionClosed(anyhow::anyhow!(
+            "connection closed"
+        )))?
+        .accept()
+        .map_err(|e| AcceptError::IncomingError(e.into()))?;
+    let alpn = conn.alpn().await.map_err(|e| AcceptError::ALPNError(e))?;
+    let connection = conn
+        .await
+        .map_err(|e| AcceptError::ConnectionError(e.into()))?;
+    Ok((alpn, connection))
 }
 
 /// Accept a new connection on this endpoint.
@@ -559,37 +620,29 @@ pub fn endpoint_accept(
 /// Does not prespecify the ALPN, and but rather returns it.
 ///
 /// Blocks the current thread until a connection is established.
+///
+/// An [`EndpointResult::IncomingError`] occurring here is likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
+/// It is not considered fatal and is common to simply log and ignore.
 #[ffi_export]
 pub fn endpoint_accept_any(
     ep: &repr_c::Box<Endpoint>,
     alpn_out: &mut vec::Vec<u8>,
     out: &repr_c::Box<Connection>,
 ) -> EndpointResult {
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        let mut conn = ep
-            .ep
-            .read()
-            .await
-            .as_ref()
-            .expect("endpoint not initalized")
-            .accept()
-            .await
-            .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
-        let alpn = conn.alpn().await?;
-        let connection = conn.await?;
-
+    let res: Result<(), AcceptError> = TOKIO_EXECUTOR.block_on(async move {
+        let (alpn, connection) = accept_conn(ep).await?;
         alpn_out.with_rust_mut(|v| {
             *v = alpn;
         });
         out.connection.write().await.replace(connection);
-        anyhow::Ok(())
+        Ok(())
     });
 
     match res {
         Ok(()) => EndpointResult::Ok,
         Err(err) => {
-            warn!("accept failed {:?}", err);
-            EndpointResult::AcceptFailed
+            warn!("accept failed {err}");
+            err.into()
         }
     }
 }
@@ -602,6 +655,9 @@ pub fn endpoint_accept_any(
 /// when an error occurs.
 /// `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
 /// called from another thread.
+///
+/// An [`EndpointResult::IncomingError`] occurring here is likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
+/// It is not considered fatal and is common to simply log and ignore.
 #[ffi_export]
 pub fn endpoint_accept_any_cb(
     ep: repr_c::Box<Endpoint>,
@@ -621,24 +677,8 @@ pub fn endpoint_accept_any_cb(
     TOKIO_EXECUTOR.spawn(async move {
         // make the compiler happy
         let _ = &ctx_ptr;
-        async fn connect(
-            ep: repr_c::Box<Endpoint>,
-        ) -> anyhow::Result<(Vec<u8>, quinn::Connection)> {
-            let mut conn = ep
-                .ep
-                .read()
-                .await
-                .as_ref()
-                .expect("endpoint not initalized")
-                .accept()
-                .await
-                .ok_or_else(|| anyhow::anyhow!("connection closed"))?;
-            let alpn = conn.alpn().await?;
-            let connection = conn.await?;
-            Ok((alpn, connection))
-        }
 
-        match connect(ep).await {
+        match accept_conn(&ep).await {
             Ok((alpn, connection)) => {
                 let alpn = alpn.into();
                 let conn = Box::new(Connection {
@@ -650,10 +690,10 @@ pub fn endpoint_accept_any_cb(
                 }
             }
             Err(err) => unsafe {
-                warn!("accept failed: {:?}", err);
+                warn!("accept failed: {err}");
                 cb(
                     ctx_ptr.0,
-                    EndpointResult::AcceptFailed,
+                    err.into(),
                     vec::Vec::EMPTY,
                     Box::<Connection>::default().into(),
                 );
@@ -726,6 +766,48 @@ pub fn connection_open_bi(
         Err(err) => {
             warn!("connect bi failed: {:?}", err);
             EndpointResult::ConnectBiError
+        }
+    }
+}
+
+/// Close a connection
+///
+/// Consumes the connection, no need to free it afterwards.
+#[ffi_export]
+pub fn connection_close(conn: repr_c::Box<Connection>) {
+    TOKIO_EXECUTOR.block_on(async move {
+        conn.connection
+            .read()
+            .await
+            .as_ref()
+            .expect("connection not initialized")
+            .close(CLOSE_CODE, b"finished")
+    });
+}
+
+/// Wait for the connection to be closed.
+///
+/// Blocks the current thread.
+///
+/// Consumes the connection, no need to free it afterwards.
+#[ffi_export]
+pub fn connection_closed(conn: repr_c::Box<Connection>) -> EndpointResult {
+    let res = TOKIO_EXECUTOR.block_on(async move {
+        conn.connection
+            .read()
+            .await
+            .as_ref()
+            .expect("connection not initialized")
+            .closed()
+            .await
+    });
+    match res {
+        ConnectionError::LocallyClosed | ConnectionError::ApplicationClosed(_) => {
+            EndpointResult::Ok
+        }
+        _ => {
+            dbg!(res);
+            EndpointResult::CloseError
         }
     }
 }
@@ -847,13 +929,15 @@ mod tests {
             s.send(node_addr).unwrap();
 
             // accept connection
-            println!("[s] accepting conn");
+            println!("[s] endpoint accept");
             let mut conn = connection_default();
             let accept_res = endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
             assert_eq!(accept_res, EndpointResult::Ok);
 
+            println!("[s] connection accept uni");
             let mut recv_stream = recv_stream_default();
             let accept_res = connection_accept_uni(&conn, &mut recv_stream);
+            println!("[s] connection_accept_uni accept_res: {accept_res:?}");
             assert_eq!(accept_res, EndpointResult::Ok);
 
             println!("[s] reading");
@@ -865,6 +949,8 @@ mod tests {
                 std::str::from_utf8(&recv_buffer[..read_res as usize]).unwrap(),
                 "hello world"
             );
+            println!("[s] closing connection");
+            connection_close(conn);
         });
 
         // setup client
@@ -883,6 +969,7 @@ mod tests {
             let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
             assert_eq!(connect_res, EndpointResult::Ok);
 
+            println!("[c] connection open uni");
             let mut send_stream = send_stream_default();
             let open_res = connection_open_uni(&conn, &mut send_stream);
             assert_eq!(open_res, EndpointResult::Ok);
@@ -891,8 +978,11 @@ mod tests {
             let send_res = send_stream_write(&mut send_stream, b"hello world"[..].into());
             assert_eq!(send_res, EndpointResult::Ok);
 
-            let finish_res = send_stream_finish(send_stream);
-            assert_eq!(finish_res, EndpointResult::Ok);
+            println!("[c] waiting for recv to close the connection");
+
+            let closed_res = connection_closed(conn);
+            println!("[c] closed");
+            assert_eq!(closed_res, EndpointResult::Ok);
         });
 
         server_thread.join().unwrap();
@@ -929,6 +1019,7 @@ mod tests {
             println!("[s] accepting conn");
             let mut conn = connection_default();
             let accept_res = endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            println!("[s] accept_res: {accept_res:?}");
             assert_eq!(accept_res, EndpointResult::Ok);
 
             println!("[s] opening uni");
@@ -941,8 +1032,10 @@ mod tests {
             let send_res = send_stream_write(&mut send_stream, b"hello world"[..].into());
             assert_eq!(send_res, EndpointResult::Ok);
 
-            let finish_res = send_stream_finish(send_stream);
-            assert_eq!(finish_res, EndpointResult::Ok);
+            println!("[s] waiting for recv side to close the connection");
+            let closed_res = connection_closed(conn);
+            assert_eq!(closed_res, EndpointResult::Ok);
+            println!("[s] closed");
         });
 
         // setup client
@@ -974,6 +1067,8 @@ mod tests {
                 std::str::from_utf8(&recv_buffer[..read_res as usize]).unwrap(),
                 "hello world"
             );
+            println!("[c] closing connection");
+            connection_close(conn);
         });
 
         server_thread.join().unwrap();

@@ -88,6 +88,20 @@ enum EndpointResult {
      *  Timeout elapsed.
      */
     ENDPOINT_RESULT_TIMEOUT,
+    /** \brief
+     *  Error while closing.
+     */
+    ENDPOINT_RESULT_CLOSE_ERROR,
+    /** \brief
+     *  Failed to accept an incoming connection.
+     *
+     *  This occurs before the handshake is even attempted.
+     *
+     *  Likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
+     *
+     *  It is common to simply log this error and move on.
+     */
+    ENDPOINT_RESULT_INCOMING_ERROR,
 }
 #ifndef DOXYGEN
 ; typedef uint8_t
@@ -114,6 +128,26 @@ EndpointResult_t
 connection_accept_uni (
     Connection_t * const * conn,
     RecvStream_t * * out);
+
+/** \brief
+ *  Close a connection
+ *
+ *  Consumes the connection, no need to free it afterwards.
+ */
+void
+connection_close (
+    Connection_t * conn);
+
+/** \brief
+ *  Wait for the connection to be closed.
+ *
+ *  Blocks the current thread.
+ *
+ *  Consumes the connection, no need to free it afterwards.
+ */
+EndpointResult_t
+connection_closed (
+    Connection_t * conn);
 
 /** \brief
  *  Result must be freed using `connection_free`.
@@ -261,6 +295,9 @@ typedef struct Endpoint Endpoint_t;
  *  Accept a new connection on this endpoint.
  *
  *  Blocks the current thread until a connection is established.
+ *
+ *  An [`EndpointResult::IncomingError`] occurring here is likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
+ *  It is not considered fatal and is common to simply log and ignore.
  */
 EndpointResult_t
 endpoint_accept (
@@ -274,6 +311,9 @@ endpoint_accept (
  *  Does not prespecify the ALPN, and but rather returns it.
  *
  *  Blocks the current thread until a connection is established.
+ *
+ *  An [`EndpointResult::IncomingError`] occurring here is likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
+ *  It is not considered fatal and is common to simply log and ignore.
  */
 EndpointResult_t
 endpoint_accept_any (
@@ -290,6 +330,9 @@ endpoint_accept_any (
  *  when an error occurs.
  *  `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
  *  called from another thread.
+ *
+ *  An [`EndpointResult::IncomingError`] occurring here is likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
+ *  It is not considered fatal and is common to simply log and ignore.
  */
 void
 endpoint_accept_any_cb (
@@ -871,8 +914,6 @@ send_stream_default (void);
  *  Finish the sending on this stream.
  *
  *  Consumes the send stream, no need to free it afterwards.
- *
- *  Blocks the current thread.
  */
 EndpointResult_t
 send_stream_finish (
