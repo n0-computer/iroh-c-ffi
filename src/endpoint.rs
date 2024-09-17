@@ -14,7 +14,7 @@ use safer_ffi::{prelude::*, slice, vec};
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
 
-use crate::addr::NodeAddr;
+use crate::addr::{NodeAddr, SocketAddrV4, SocketAddrV6};
 use crate::key::{secret_key_generate, SecretKey};
 use crate::stream::{RecvStream, SendStream};
 use crate::util::TOKIO_EXECUTOR;
@@ -221,15 +221,16 @@ pub enum EndpointResult {
     IncomingError,
 }
 
-/// Attempts to bind the endpoint to the given port.
+/// Attempts to bind the endpoint to the provided IPv4 and IPv6 address.
 ///
-/// If the port is already in use, a random port will be used.
+/// If the selected port is already in use, a random port will be used.
 ///
 /// Blocks the current thread.
 #[ffi_export]
 pub fn endpoint_bind(
     config: &EndpointConfig,
-    port: u16,
+    ipv4_addr: Option<repr_c::Box<SocketAddrV4>>,
+    ipv6_addr: Option<repr_c::Box<SocketAddrV6>>,
     out: &repr_c::Box<Endpoint>,
 ) -> EndpointResult {
     let mut alpn_protocols = Vec::with_capacity(config.alpn_protocols.len());
@@ -256,8 +257,17 @@ pub fn endpoint_bind(
         if let Some(discovery) = discovery {
             builder = builder.discovery(Box::new(discovery));
         }
+        if let Some(ref addr) = ipv4_addr {
+            let addr: &SocketAddrV4 = addr;
+            builder = builder.bind_addr_v4(addr.into());
+        }
 
-        let builder = builder.bind(port).await;
+        if let Some(ref addr) = ipv6_addr {
+            let addr: &SocketAddrV6 = addr;
+            builder = builder.bind_addr_v6(addr.into());
+        }
+
+        let builder = builder.bind().await;
 
         match builder {
             Ok(ep) => {
@@ -919,7 +929,7 @@ mod tests {
         let server_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
             let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_server, 0, &mut ep);
+            let bind_res = endpoint_bind(&config_server, None, None, &mut ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
@@ -957,7 +967,7 @@ mod tests {
         let client_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
             let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_client, 0, &mut ep);
+            let bind_res = endpoint_bind(&config_client, None, None, &mut ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
@@ -1006,7 +1016,7 @@ mod tests {
         let server_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
             let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_server, 0, &mut ep);
+            let bind_res = endpoint_bind(&config_server, None, None, &mut ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
@@ -1042,7 +1052,7 @@ mod tests {
         let client_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
             let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_client, 0, &mut ep);
+            let bind_res = endpoint_bind(&config_client, None, None, &mut ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
@@ -1093,7 +1103,7 @@ mod tests {
         let server_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
             let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_server, 0, &mut ep);
+            let bind_res = endpoint_bind(&config_server, None, None, &mut ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
@@ -1121,7 +1131,7 @@ mod tests {
         let client_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
             let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_client, 0, &mut ep);
+            let bind_res = endpoint_bind(&config_client, None, None, &mut ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
@@ -1166,7 +1176,7 @@ mod tests {
         let server_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
             let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_server, 0, &mut ep);
+            let bind_res = endpoint_bind(&config_server, None, None, &mut ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
@@ -1209,7 +1219,7 @@ mod tests {
         let client_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
             let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_client, 0, &mut ep);
+            let bind_res = endpoint_bind(&config_client, None, None, &mut ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
@@ -1273,7 +1283,7 @@ mod tests {
         let server_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
             let ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_server, 0, &ep);
+            let bind_res = endpoint_bind(&config_server, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
@@ -1346,7 +1356,7 @@ mod tests {
         let client_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
             let ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_client, 0, &ep);
+            let bind_res = endpoint_bind(&config_client, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server

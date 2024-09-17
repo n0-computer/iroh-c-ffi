@@ -190,7 +190,7 @@ int main(int argc, char const *const argv[])
     server_params[1].config = &config;
 
     Endpoint_t *ep = endpoint_default();
-    int bind_res = endpoint_bind(&config, 0, &ep);
+    int bind_res = endpoint_bind(&config, NULL, NULL, &ep);
     if (bind_res != 0)
     {
         fprintf(stderr, "failed to bind server\n");

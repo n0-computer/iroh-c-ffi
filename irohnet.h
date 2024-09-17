@@ -435,16 +435,27 @@ typedef struct EndpointConfig {
 } EndpointConfig_t;
 
 /** \brief
- *  Attempts to bind the endpoint to the given port.
+ *  Represents an IPv4 address, including a port number.
+ */
+typedef struct SocketAddrV4 SocketAddrV4_t;
+
+/** \brief
+ *  Represents an IPv6 address, including a port number.
+ */
+typedef struct SocketAddrV6 SocketAddrV6_t;
+
+/** \brief
+ *  Attempts to bind the endpoint to the provided IPv4 and IPv6 address.
  *
- *  If the port is already in use, a random port will be used.
+ *  If the selected port is already in use, a random port will be used.
  *
  *  Blocks the current thread.
  */
 EndpointResult_t
 endpoint_bind (
     EndpointConfig_t const * config,
-    uint16_t port,
+    SocketAddrV4_t * ipv4_addr,
+    SocketAddrV6_t * ipv6_addr,
     Endpoint_t * const * out);
 
 /** \brief
@@ -968,6 +979,58 @@ AddrResult_t
 socket_addr_from_string (
     char const * input,
     SocketAddr_t * * out);
+
+/** \brief
+ *  Formats the given socket addr as a string
+ *
+ *  Result must be freed with `rust_free_string`
+ */
+char *
+socket_addr_v4_as_str (
+    SocketAddrV4_t const * addr);
+
+/** <No documentation available> */
+SocketAddrV4_t *
+socket_addr_v4_default (void);
+
+/** <No documentation available> */
+void
+socket_addr_v4_free (
+    SocketAddrV4_t * addr);
+
+/** \brief
+ *  Try to parse a url from a string.
+ */
+AddrResult_t
+socket_addr_v4_from_string (
+    char const * input,
+    SocketAddrV4_t * * out);
+
+/** \brief
+ *  Formats the given socket addr as a string
+ *
+ *  Result must be freed with `rust_free_string`
+ */
+char *
+socket_addr_v6_as_str (
+    SocketAddrV6_t const * addr);
+
+/** <No documentation available> */
+SocketAddrV6_t *
+socket_addr_v6_default (void);
+
+/** <No documentation available> */
+void
+socket_addr_v6_free (
+    SocketAddrV6_t * addr);
+
+/** \brief
+ *  Try to parse a url from a string.
+ */
+AddrResult_t
+socket_addr_v6_from_string (
+    char const * input,
+    SocketAddrV6_t * * out);
 
 /** \brief
  *  Formats the given url as a string
