@@ -381,7 +381,7 @@ main (int argc, char const * const argv[])
       addrs_len = argc - 4;
       addrs = malloc(addrs_len * sizeof(char const*));
       for (int i = 0; i < addrs_len; i++) {
-        addrs[i] = argv[5 + i];
+        addrs[i] = argv[4 + i];
       }
     }
 
