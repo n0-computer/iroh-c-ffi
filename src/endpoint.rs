@@ -833,7 +833,6 @@ pub fn endpoint_connect(
     out: &repr_c::Box<Connection>,
 ) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
-        let node_addr = node_addr.into();
         let conn = ep
             .ep
             .read()

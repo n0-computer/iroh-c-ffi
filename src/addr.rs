@@ -102,11 +102,7 @@ pub fn node_addr_from_string(input: char_p::Ref<'_>, out: &mut NodeAddr) -> Addr
 #[ffi_export]
 pub fn node_addr_as_str(addr: &NodeAddr) -> char_p::Box {
     let addr: iroh_net::NodeAddr = addr.clone().into();
-    NodeTicket::new(addr)
-        .unwrap()
-        .to_string()
-        .try_into()
-        .unwrap()
+    NodeTicket::new(addr).to_string().try_into().unwrap()
 }
 
 /// Free the node addr.
