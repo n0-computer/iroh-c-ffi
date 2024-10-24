@@ -24,7 +24,7 @@ int run_client(EndpointConfig_t *config, slice_ref_uint8_t alpn_slice,
 
   printf("binding iroh endpoint\n");
   Endpoint_t *ep = endpoint_default();
-  int bind_res = endpoint_bind(config, 0, &ep);
+  int bind_res = endpoint_bind(config, 0, 0, &ep);
   if (bind_res != 0) {
     fprintf(stderr, "failed to bind\n");
     return -1;
