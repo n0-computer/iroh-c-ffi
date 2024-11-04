@@ -130,7 +130,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
     printf("receiving data\n");
   }
   unsigned long bytes_read = 0;
-  int err = recv_stream_read_timeout(&recv_stream, recv_buffer_slice, &bytes_read, 5000);
+  int err = recv_stream_read_timeout(&recv_stream, recv_buffer_slice, &bytes_read, 10000);
   if (err == ENDPOINT_RESULT_TIMEOUT) {
     fprintf(stderr, "failed to read data before timeout");
     return -1;
@@ -158,7 +158,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   } else {
     printf("sending data\n");
   }
-  int ret = send_stream_write_timeout(&send_stream, buffer, 5000);
+  int ret = send_stream_write_timeout(&send_stream, buffer, 10000);
   if (ret == ENDPOINT_RESULT_TIMEOUT) {
     fprintf(stderr, "failed to send data before timeout\n");
     return -1;
