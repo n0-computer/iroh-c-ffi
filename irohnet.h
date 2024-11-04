@@ -824,6 +824,21 @@ recv_stream_read (
     slice_mut_uint8_t data);
 
 /** \brief
+ *  Receive data on this stream and return with an error if reading exceeds the
+ *  given timeout.
+ *
+ *  Blocks the current thread.
+ *
+ *  On success, returns how many bytes were read in the `bytes_read` parameter.
+ */
+EndpointResult_t
+recv_stream_read_timeout (
+    RecvStream_t * * stream,
+    slice_mut_uint8_t data,
+    size_t * bytes_read,
+    uint64_t timeout_ms);
+
+/** \brief
  *  Receive data on this stream.
  *
  *  Size limit specifies how much data at most is read.
@@ -953,6 +968,18 @@ EndpointResult_t
 send_stream_write (
     SendStream_t * * stream,
     slice_ref_uint8_t data);
+
+/** \brief
+ *  Send data on the stream, returning an error if the data was not written
+ *  before the given timeout.
+ *
+ *  Blocks the current thread.
+ */
+EndpointResult_t
+send_stream_write_timeout (
+    SendStream_t * * stream,
+    slice_ref_uint8_t data,
+    uint64_t timeout_ms);
 
 /** \brief
  *  Formats the given socket addr as a string
