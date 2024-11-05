@@ -145,7 +145,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   // }
 
   // assume they sent us a nice string
-  recv_str = malloc(read + 1);
+  recv_str = malloc(bytes_read + 1);
   memcpy(recv_str, recv_buffer, bytes_read);
   recv_str[bytes_read] = '\0';
   if (json_output) {
