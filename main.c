@@ -129,20 +129,24 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   } else {
     printf("receiving data\n");
   }
-  read = recv_stream_read(&recv_stream, recv_buffer_slice);
-  if (read == -1) {
+  unsigned long bytes_read = 0;
+  int err = recv_stream_read_timeout(&recv_stream, recv_buffer_slice, &bytes_read, 5000);
+  if (err == ENDPOINT_RESULT_TIMEOUT) {
+    fprintf(stderr, "failed to read data before timeout");
+    return -1;
+    } else if (err == ENDPOINT_RESULT_READ_ERROR) {
     fprintf(stderr, "failed to read data");
     return -1;
   }
 
   // assume they sent us a nice string
-  recv_str = malloc(read + 1);
-  memcpy(recv_str, recv_buffer, read);
-  recv_str[read] = '\0';
+  recv_str = malloc(bytes_read + 1);
+  memcpy(recv_str, recv_buffer, bytes_read);
+  recv_str[bytes_read] = '\0';
   if (json_output) {
     printf("{ \"type\": \"server\", \"status\": \"received\", \"data\": \"%s\" }\n", recv_str);
   } else {
-    printf("received: '%s'\n", recv_str);
+    printf("received: '%s'\n%lu bytes\n", recv_str, bytes_read);
   }
 
   // send response
@@ -154,8 +158,11 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   } else {
     printf("sending data\n");
   }
-  int ret = send_stream_write(&send_stream, buffer);
-  if (ret != 0) {
+  int ret = send_stream_write_timeout(&send_stream, buffer, 10000);
+  if (ret == ENDPOINT_RESULT_TIMEOUT) {
+    fprintf(stderr, "failed to send data before timeout\n");
+    return -1;
+  } else if (ret != 0) {
     fprintf(stderr, "failed to send data\n");
     return -1;
   }
