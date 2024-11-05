@@ -66,7 +66,7 @@ jobs:
               run: |
                 ./main server --json > server_output.json &
                 # Wait for the server to start
-                sleep 3
+                sleep 10
                 # Read the second line of the file
                 line=$(sed -n '2p' server_output.json)
 
@@ -182,7 +182,7 @@ jobs:
               run: |
                 Start-Process -NoNewWindow -FilePath "./main.exe" -ArgumentList "server", "--json" -RedirectStandardOutput "server_output.json"
                 # Wait for the server to start
-                Start-Sleep -Seconds 3
+                Start-Sleep -Seconds 10
                 # Read the second line of the file
                 $line = Get-Content server_output.json | Select-Object -Index 1
 
@@ -199,7 +199,7 @@ jobs:
                 $relay = $json_output.relay
                 $addrs = $json_output.addrs
                 & "./main" "client" $node_id $relay $addrs
-                Start-Sleep -Seconds 3
+                Start-Sleep -Seconds 10
 
                 # Read the 3rd line of the file
                 $last_line = Get-Content server_output.json | Select-Object -Index 2
