@@ -61,10 +61,13 @@ jobs:
               env:
                 LD_LIBRARY_PATH: target/release
             - name: test run
+              id: run_tests
+              continue-on-error: true
               env:
                 LD_LIBRARY_PATH: target/release
               run: |
                 ./main server --json > server_output.json &
+                server_pid=$!
                 # Wait for the server to start
                 sleep 10
                 # Read the second line of the file
@@ -86,6 +89,9 @@ jobs:
                 addrs=$(echo $json_output | jq -r '.addrs[]')
                 ./main client $node_id $relay ${addrs[@]}
                 sleep 10
+
+                # force kill the server, should make sure output is flushed
+                kill $server_pid || true
 
                 # Read the 3rd line of the file
                 last_line=$(sed -n '3p' server_output.json)
@@ -112,6 +118,12 @@ jobs:
                 fi
 
                 echo "Success"
+            - name: Fail Job if Tests Failed
+              if: ${{ steps.run_tests.outcome == 'failure' }}
+              run: |
+                echo "Tests failed, server logs are:"
+                cat server_output.json
+                exit 1
             - name: check headers
               shell: bash
               run: |
@@ -179,6 +191,8 @@ jobs:
               env:
                 LD_LIBRARY_PATH: target/release
             - name: test run
+              id: run_tests
+              continue-on-error: true
               run: |
                 Start-Process -NoNewWindow -FilePath "./main.exe" -ArgumentList "server", "--json" -RedirectStandardOutput "server_output.json"
                 # Wait for the server to start
@@ -221,6 +235,12 @@ jobs:
                     exit 1
                 }
                 Write-Output "Success"
+            - name: Fail Job if Tests Failed
+              if: ${{ steps.run_tests.outcome == 'failure' }}
+              run: |
+                Write-Output "Tests failed, server logs are:"
+                Get-Content server_output.json
+                exit 1
 
     android_build:
         name: Android Build Only
