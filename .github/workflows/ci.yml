@@ -241,7 +241,10 @@ jobs:
                     Write-Output $json_output
                     exit 1
                 }
+                Write-Output ""
                 Write-Output "Success"
+                Write-Output "server_output.json:"
+                Get-Content server_output.json
             - name: Fail Job if Tests Failed
               if: ${{ steps.run_tests.outcome == 'failure' }}
               run: |
