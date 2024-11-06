@@ -119,7 +119,9 @@ jobs:
                     exit 1
                 fi
 
-                echo "Success"
+                echo "\nSuccess"
+                echo "server_output.json:"
+                cat server_output.json
             - name: Fail Job if Tests Failed
               if: ${{ steps.run_tests.outcome == 'failure' }}
               run: |
