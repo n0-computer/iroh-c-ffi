@@ -99,7 +99,7 @@ jobs:
                 json_output=$(echo $last_line | jq -r '.data')
                 # Ensure json_output is as expected
                 if [[ "$json_output" != "hello world from C" ]]; then
-                    echo "Error: Unexpected output"
+                    echo "Error: Unexpected output for line 3"
                     echo $last_line
                     echo "server_output.json:"
                     cat server_output.json
@@ -112,7 +112,7 @@ jobs:
                 json_output=$(echo $last_line | jq -r '.data')
                 # Ensure json_output is as expected
                 if [[ "$json_output" != "hello world from C" ]]; then
-                    echo "Error: Unexpected output"
+                    echo "Error: Unexpected output for line 6"
                     echo $last_line
                     echo "server_output.json:"
                     cat server_output.json
