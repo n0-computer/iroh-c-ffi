@@ -144,105 +144,107 @@ jobs:
               env:
                 CARGO_CRATE_NAME: iroh_net_ffi
 
-    # build_and_test_windows:
-    #     name: Build and test
-    #     timeout-minutes: 30
-    #     runs-on: ${{ matrix.runner }}
-    #     strategy:
-    #         fail-fast: false
-    #         matrix:
-    #             name: [windows-latest]
-    #             rust: [stable]
-    #             target:
-    #                 - x86_64-pc-windows-gnu
-    #             include:
-    #                 - name: windows-latest
-    #                   os: windows
-    #                   runner: [self-hosted, windows, x64]
-    #     steps:
-    #         - name: Checkout
-    #           uses: actions/checkout@v4
-    #         - name: Install ${{ matrix.rust }}
-    #           run: |
-    #             rustup toolchain install ${{ matrix.rust }}
-    #             rustup toolchain default ${{ matrix.rust }}
-    #             rustup target add ${{ matrix.target }}
-    #             rustup set default-host ${{ matrix.target }}
-    #         - name: Install cargo-nextest
-    #           shell: powershell
-    #           run: |
-    #             $tmp = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
-    #             Invoke-WebRequest -OutFile $tmp https://get.nexte.st/latest/windows
-    #             $outputDir = if ($Env:CARGO_HOME) { Join-Path $Env:CARGO_HOME "bin" } else { "~/.cargo/bin" }
-    #             $tmp | Expand-Archive -DestinationPath $outputDir -Force
-    #             $tmp | Remove-Item
-    #         - uses: msys2/setup-msys2@v2
-    #         - name: run tests
-    #           run: |
-    #             cargo nextest run --all-features --lib --bins --tests --no-fail-fast
-    #           env:
-    #             RUST_LOG: "TRACE"
-    #         - name: build
-    #           run: |
-    #             cargo build --release --target ${{ matrix.target }}
-    #             cargo run --features headers --bin generate_headers --release --target ${{ matrix.target }}
-    #         - name: build test binary
-    #           run: |
-    #             cp target/x86_64-pc-windows-gnu/release/iroh_net_ffi.dll iroh_net_ffi.dll
-    #             gcc -o main.exe main.c -L target/x86_64-pc-windows-gnu/release -liroh_net_ffi -lm -lkernel32 -ladvapi32 -lbcrypt -lntdll -luserenv -lws2_32 -lmsvcrt
-    #           env:
-    #             LD_LIBRARY_PATH: target/release
-    #         - name: test run
-    #           id: run_tests
-    #           continue-on-error: true
-    #           run: |
-    #             Start-Process -NoNewWindow -FilePath "./main.exe" -ArgumentList "server", "--json" -RedirectStandardOutput "server_output.json"
-    #             # Wait for the server to start
-    #             Start-Sleep -Seconds 10
-    #             # Read the second line of the file
-    #             $line = Get-Content server_output.json | Select-Object -Index 1
+    build_and_test_windows:
+        name: Build and test
+        timeout-minutes: 30
+        runs-on: ${{ matrix.runner }}
+        strategy:
+            fail-fast: false
+            matrix:
+                name: [windows-latest]
+                rust: [stable]
+                target:
+                    - x86_64-pc-windows-gnu
+                include:
+                    - name: windows-latest
+                      os: windows
+                      runner: [self-hosted, windows, x64]
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+            - name: Install ${{ matrix.rust }}
+              run: |
+                rustup toolchain install ${{ matrix.rust }}
+                rustup toolchain default ${{ matrix.rust }}
+                rustup target add ${{ matrix.target }}
+                rustup set default-host ${{ matrix.target }}
+            - name: Install cargo-nextest
+              shell: powershell
+              run: |
+                $tmp = New-TemporaryFile | Rename-Item -NewName { $_ -replace 'tmp$', 'zip' } -PassThru
+                Invoke-WebRequest -OutFile $tmp https://get.nexte.st/latest/windows
+                $outputDir = if ($Env:CARGO_HOME) { Join-Path $Env:CARGO_HOME "bin" } else { "~/.cargo/bin" }
+                $tmp | Expand-Archive -DestinationPath $outputDir -Force
+                $tmp | Remove-Item
+            - uses: msys2/setup-msys2@v2
+            - name: run tests
+              run: |
+                cargo nextest run --all-features --lib --bins --tests --no-fail-fast
+              env:
+                RUST_LOG: "TRACE"
+            - name: build
+              run: |
+                cargo build --release --target ${{ matrix.target }}
+                cargo run --features headers --bin generate_headers --release --target ${{ matrix.target }}
+            - name: build test binary
+              run: |
+                cp target/x86_64-pc-windows-gnu/release/iroh_net_ffi.dll iroh_net_ffi.dll
+                gcc -o main.exe main.c -L target/x86_64-pc-windows-gnu/release -liroh_net_ffi -lm -lkernel32 -ladvapi32 -lbcrypt -lntdll -luserenv -lws2_32 -lmsvcrt
+              env:
+                LD_LIBRARY_PATH: target/release
+            - name: test run
+              id: run_tests
+              continue-on-error: true
+              run: |
+                Start-Process -NoNewWindow -FilePath "./main.exe" -ArgumentList "server", "--json" -RedirectStandardOutput "server_output.json"
+                # Wait for the server to start
+                Start-Sleep -Seconds 10
+                # Read the second line of the file
+                $line = Get-Content server_output.json | Select-Object -Index 1
 
-    #             # Check if the line is empty
-    #             if ([string]::IsNullOrEmpty($line)) {
-    #                 Write-Output "Error: server_output.json does not have at least 2 lines"
-    #                 exit 1
-    #             }
-    #             # Parse the JSON
-    #             $json_output = ConvertFrom-Json $line
+                # Check if the line is empty
+                if ([string]::IsNullOrEmpty($line)) {
+                    Write-Output "Error: server_output.json does not have at least 2 lines"
+                    exit 1
+                }
+                # Parse the JSON
+                $json_output = ConvertFrom-Json $line
 
-    #             # Store variables
-    #             $node_id = $json_output.node_id
-    #             $relay = $json_output.relay
-    #             $addrs = $json_output.addrs
-    #             & "./main" "client" $node_id $relay $addrs
-    #             Start-Sleep -Seconds 10
+                # Store variables
+                $node_id = $json_output.node_id
+                $relay = $json_output.relay
+                $addrs = $json_output.addrs
+                & "./main" "client" $node_id $relay $addrs
+                Start-Sleep -Seconds 10
 
-    #             # Read the 3rd line of the file
-    #             $last_line = Get-Content server_output.json | Select-Object -Index 2
-    #             # Parse the JSON
-    #             $json_output = ConvertFrom-Json $last_line
-    #             # Ensure json_output is as expected
-    #             if ($json_output.data -ne "hello world from C") {
-    #                 Write-Output "Error: Unexpected output"
-    #                 exit 1
-    #             }
+                # Read the 3rd line of the file
+                $last_line = Get-Content server_output.json | Select-Object -Index 2
+                # Parse the JSON
+                $json_output = ConvertFrom-Json $last_line
+                # Ensure json_output is as expected
+                if ($json_output.data -ne "hello world from C") {
+                    Write-Output "Error: Unexpected output"
+                    Write-Output $json_output
+                    exit 1
+                }
 
-    #             # Repeat for the 6th line of the file
-    #             $last_line = Get-Content server_output.json | Select-Object -Index 5
-    #             # Parse the JSON
-    #             $json_output = ConvertFrom-Json $last_line
-    #             # Ensure json_output is as expected
-    #             if ($json_output.data -ne "hello world from C") {
-    #                 Write-Output "Error: Unexpected output"
-    #                 exit 1
-    #             }
-    #             Write-Output "Success"
-    #         - name: Fail Job if Tests Failed
-    #           if: ${{ steps.run_tests.outcome == 'failure' }}
-    #           run: |
-    #             Write-Output "Tests failed, server logs are:"
-    #             Get-Content server_output.json
-    #             exit 1
+                # Repeat for the 6th line of the file
+                $last_line = Get-Content server_output.json | Select-Object -Index 5
+                # Parse the JSON
+                $json_output = ConvertFrom-Json $last_line
+                # Ensure json_output is as expected
+                if ($json_output.data -ne "hello world from C") {
+                    Write-Output "Error: Unexpected output"
+                    Write-Output $json_output
+                    exit 1
+                }
+                Write-Output "Success"
+            - name: Fail Job if Tests Failed
+              if: ${{ steps.run_tests.outcome == 'failure' }}
+              run: |
+                Write-Output "Tests failed, server logs are:"
+                Get-Content server_output.json
+                exit 1
 
     # android_build:
     #     name: Android Build Only
