@@ -90,9 +90,7 @@ jobs:
                 ./main client $node_id $relay ${addrs[@]}
                 sleep 10
 
-                # force kill the server, should make sure output is flushed
-                # kill $server_pid || true
-
+                # wait for server the shutdown
                 wait $server_pid
                 server_status=$?
                 echo ""
@@ -228,6 +226,8 @@ jobs:
 
                 # wait for the server process to terminate
                 Wait-Process -InputObject $server_process
+
+                # # ramfox: ExitCode in windows seems to not work in all environments. I've tried a few variations, but they all show the exitCode as Null. commenting this out for now.
                 # $exitCode = $server_process.ExitCode
 
                 # Write-Output ""
@@ -243,7 +243,7 @@ jobs:
                 $json_output = ConvertFrom-Json $last_line
                 # Ensure json_output is as expected
                 if ($json_output.data -ne "hello world from C") {
-                    Write-Output "Error: Unexpected output"
+                    Write-Output "Error: Unexpected output for line 3"
                     Write-Output $json_output
                     exit 1
                 }
@@ -254,7 +254,7 @@ jobs:
                 $json_output = ConvertFrom-Json $last_line
                 # Ensure json_output is as expected
                 if ($json_output.data -ne "hello world from C") {
-                    Write-Output "Error: Unexpected output"
+                    Write-Output "Error: Unexpected output for line 6"
                     Write-Output $json_output
                     exit 1
                 }
