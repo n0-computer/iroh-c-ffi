@@ -100,7 +100,7 @@ jobs:
                 # Ensure json_output is as expected
                 if [[ "$json_output" != "hello world from C" ]]; then
                     echo "Error: Unexpected output"
-                    echo $json_output
+                    echo $last_line
                     echo "server_output.json:"
                     cat server_output.json
                     exit 1
@@ -113,13 +113,14 @@ jobs:
                 # Ensure json_output is as expected
                 if [[ "$json_output" != "hello world from C" ]]; then
                     echo "Error: Unexpected output"
-                    echo $json_output
+                    echo $last_line
                     echo "server_output.json:"
                     cat server_output.json
                     exit 1
                 fi
 
-                echo "\nSuccess"
+                echo ""
+                echo "Success"
                 echo "server_output.json:"
                 cat server_output.json
             - name: Fail Job if Tests Failed
