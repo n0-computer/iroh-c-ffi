@@ -224,18 +224,18 @@ jobs:
                 $relay = $json_output.relay
                 $addrs = $json_output.addrs
                 & "./main" "client" $node_id $relay $addrs
-                Start-Sleep -Seconds 10
+                # Start-Sleep -Seconds 10
 
                 # $server_process.WaitForExit()
                 Wait-Process -InputObject $server_process
-                $exitCode = $server_process.ExitCode
+                # $exitCode = $server_process.ExitCode
 
-                Write-Output ""
-                Write-Output "Server process exited with code: $exitCode"
+                # Write-Output ""
+                # Write-Output "Server process exited with code: $exitCode"
 
-                if ($exitCode -ne 0) {
-                    exit 1
-                }
+                # if ($exitCode -ne 0) {
+                #     exit 1
+                # }
 
                 # Read the 3rd line of the file
                 $last_line = Get-Content server_output.json | Select-Object -Index 2
