@@ -116,6 +116,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   } else {
     printf("accepting bi\n");
   }
+  fflush(stdout);
   recv_stream = recv_stream_default();
   SendStream_t * send_stream = send_stream_default();
   res = connection_accept_bi(&conn, &send_stream,&recv_stream);
@@ -129,6 +130,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   } else {
     printf("receiving data\n");
   }
+  fflush(stdout);
   read = recv_stream_read(&recv_stream, recv_buffer_slice);
   if (read == -1) {
     fprintf(stderr, "failed to read data");
@@ -144,6 +146,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   } else {
     printf("received: '%s'\n", recv_str);
   }
+  fflush(stdout);
 
   // send response
   slice_ref_uint8_t buffer;
@@ -154,6 +157,8 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   } else {
     printf("sending data\n");
   }
+  fflush(stdout);
+
   int ret = send_stream_write(&send_stream, buffer);
   if (ret != 0) {
     fprintf(stderr, "failed to send data\n");

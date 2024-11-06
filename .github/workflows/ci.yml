@@ -91,7 +91,11 @@ jobs:
                 sleep 10
 
                 # force kill the server, should make sure output is flushed
-                kill $server_pid || true
+                # kill $server_pid || true
+
+                wait $server_pid
+                my_status=$?
+                echo "Server closed with status $my_status"
 
                 # Read the 3rd line of the file
                 last_line=$(sed -n '3p' server_output.json)
