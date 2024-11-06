@@ -226,9 +226,12 @@ jobs:
                 & "./main" "client" $node_id $relay $addrs
                 Start-Sleep -Seconds 10
 
+                # cache the handle: https://stackoverflow.com/a/23797762
+                $handle = $server_process.Handle
                 $server_process.WaitForExit()
                 $exitCode = $server_process.ExitCode
 
+                Write-Output ""
                 Write-Output "Server process exited with code: $exitCode"
 
                 if ($exitCode -ne 0) {
