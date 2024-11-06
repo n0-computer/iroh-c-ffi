@@ -234,7 +234,7 @@ jobs:
                 Write-Output "Server process exited with code: $exitCode"
 
                 if ($exitCode -ne 0) {
-                    exit $exitCode
+                    exit 1
                 }
 
                 # Read the 3rd line of the file
