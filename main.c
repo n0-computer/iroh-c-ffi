@@ -205,10 +205,22 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
     return -1;
   }
 
+  if (json_output) {
+     printf("{ \"type\": \"server\", \"status\": \"sent data\"}\n");
+  } else {
+      printf("server sent write data");
+  }
+  fflush(stdout);
+
   // finish
   ret = send_stream_finish(send_stream);
   if (ret != 0) {
-    fprintf(stderr, "failed to finish sending\n");
+    if (json_output) {
+      printf("{ \"type\": \"server\", \"status\": \"stream finish error\", \"data\": \"%d\" }\n", ret);
+      fflush(stdout);
+    } else {
+      fprintf(stderr, "failed to finish sending\n");
+    }
     return -1;
   }
 
@@ -216,7 +228,12 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   printf("waiting for connection to close");
   ret = connection_closed(conn);
   if (ret != 0) {
-    fprintf(stderr, "failed to close connection cleanly\n");
+    if (json_output) {
+      printf("{ \"type\": \"server\", \"status\": \"connection close err\", \"data\": \"%d\" }\n", ret);
+      fflush(stdout);
+    } else {
+      fprintf(stderr, "failed to close connection cleanly\n");
+    }
     return -1;
   }
 
