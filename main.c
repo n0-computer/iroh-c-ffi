@@ -125,6 +125,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   // Accept bi directional connection
   if (json_output) {
     printf("{ \"type\": \"server\", \"status\": \"accepting bi\" }\n");
+    fflush(stdout);
   } else {
     printf("accepting bi\n");
   }
@@ -132,12 +133,18 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   SendStream_t * send_stream = send_stream_default();
   res = connection_accept_bi(&conn, &send_stream,&recv_stream);
   if (res != 0) {
-    fprintf(stderr, "failed to accept stream");
+    if (json_output) {
+      printf("{ \"type\": \"server\", \"status\": \"receiving data\" }\n");
+      fflush(stdout);
+    } else {
+      fprintf(stderr, "failed to accept stream");
+    }
     return -1;
   }
 
   if (json_output) {
     printf("{ \"type\": \"server\", \"status\": \"receiving data\" }\n");
+    fflush(stdout);
   } else {
     printf("receiving data\n");
   }
@@ -146,6 +153,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   if (err != 0) {
     if (json_output) {
       printf("{ \"type\": \"server\", \"status\": \"stream read timeout\", \"data\": \"%d\" }\n", err);
+      fflush(stdout);
     } else {
       if (err == ENDPOINT_RESULT_TIMEOUT) {
         fprintf(stderr, "failed to read data before timeout");
@@ -165,6 +173,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   recv_str[bytes_read] = '\0';
   if (json_output) {
     printf("{ \"type\": \"server\", \"status\": \"received\", \"data\": \"%s\" }\n", recv_str);
+    fflush(stdout);
   } else {
     printf("received: '%s'\n%lu bytes\n", recv_str, bytes_read);
   }
@@ -175,6 +184,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   buffer.len = strlen(recv_str);
   if (json_output) {
     printf("{ \"type\": \"server\", \"status\": \"sending data\" }\n");
+    fflush(stdout);
   } else {
     printf("sending data\n");
   }
@@ -182,6 +192,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   if (ret != 0) {
     if (json_output) {
       printf("{ \"type\": \"server\", \"status\": \"stream write timeout\", \"data\": \"%d\" }\n", err);
+      fflush(stdout);
     } else {
       if (err == ENDPOINT_RESULT_TIMEOUT) {
         fprintf(stderr, "failed to send data before timeout");
