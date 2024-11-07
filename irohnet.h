@@ -979,7 +979,7 @@ EndpointResult_t
 send_stream_write_timeout (
     SendStream_t * * stream,
     slice_ref_uint8_t data,
-    uint64_t timeout_ms);
+    uint64_t _timeout_ms);
 
 /** \brief
  *  Formats the given socket addr as a string

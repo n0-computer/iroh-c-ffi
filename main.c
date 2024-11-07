@@ -188,7 +188,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   } else {
     printf("sending data\n");
   }
-  int ret = send_stream_write_timeout(&send_stream, buffer, 10000);
+  int ret = send_stream_write_timeout(&send_stream, buffer, 5000);
   if (ret != 0) {
     if (json_output) {
       printf("{ \"type\": \"server\", \"status\": \"stream write timeout\", \"data\": \"%d\" }\n", err);
@@ -385,6 +385,8 @@ run_client (
   recv_str[read] = '\0';
   printf("received: '%s'\n", recv_str);
 
+  fflush(stdout);
+
   // finish
   ret = send_stream_finish(send_stream);
   if (ret != 0) {
@@ -396,6 +398,8 @@ run_client (
   printf("closing connection\n");
   connection_close(conn);
   printf("connection closed");
+
+  fflush(stdout);
 
   // cleanup
   free(recv_str);
