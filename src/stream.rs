@@ -211,30 +211,25 @@ pub fn send_stream_write(
 pub fn send_stream_write_timeout(
     stream: &mut repr_c::Box<SendStream>,
     data: slice::slice_ref<'_, u8>,
-    _timeout_ms: u64,
+    timeout_ms: u64,
 ) -> EndpointResult {
-    // let timeout = Duration::from_millis(timeout_ms);
+    let timeout = Duration::from_millis(timeout_ms);
     let res = TOKIO_EXECUTOR.block_on(async move {
-        // tokio::time::timeout(timeout, async move {
-        stream
-            .stream
-            .as_mut()
-            .expect("sendstream not initialized")
-            .write_all(&data)
-            .await
-        // })
-        // .await
+        tokio::time::timeout(timeout, async move {
+            stream
+                .stream
+                .as_mut()
+                .expect("sendstream not initialized")
+                .write_all(&data)
+                .await
+        })
+        .await
     });
 
     match res {
-        // Ok(Ok(())) => EndpointResult::Ok,
-        // Ok(Err(_err)) => EndpointResult::SendError,
-        // Err(_err) => EndpointResult::Timeout,
-        Ok(()) => EndpointResult::Ok,
-        Err(err) => {
-            println!("SEND_STREAM_WRITE_TIMEOUT err: {err:?}");
-            EndpointResult::SendError
-        }
+        Ok(Ok(())) => EndpointResult::Ok,
+        Ok(Err(_err)) => EndpointResult::SendError,
+        Err(_err) => EndpointResult::Timeout,
     }
 }
 

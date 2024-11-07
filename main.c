@@ -200,7 +200,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
     printf("sending data\n");
   }
 
-  int ret = send_stream_write(&send_stream, buffer);
+  int ret = send_stream_write_timeout(&send_stream, buffer, 10000);
   if (ret != 0) {
     if (json_output) {
       printf("{ \"type\": \"server\", \"status\": \"stream write timeout\", \"data\": \"%d\" }\n", ret);
