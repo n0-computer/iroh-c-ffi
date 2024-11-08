@@ -73,9 +73,10 @@ pub fn recv_stream_read(
 pub fn recv_stream_read_timeout(
     stream: &mut repr_c::Box<RecvStream>,
     mut data: slice::slice_mut<'_, u8>,
-    bytes_read: &mut u64,
+    // bytes_read: &mut u64,
     timeout_ms: u64,
-) -> EndpointResult {
+    // ) -> EndpointResult {
+) -> i64 {
     let timeout = Duration::from_millis(timeout_ms);
 
     let res = TOKIO_EXECUTOR.block_on(async move {
@@ -92,11 +93,18 @@ pub fn recv_stream_read_timeout(
 
     match res {
         Ok(Ok(read)) => {
-            *bytes_read = read.unwrap_or(0) as u64;
-            EndpointResult::Ok
+            read.unwrap_or(0) as i64
+            // *bytes_read = read.unwrap_or(0) as i64
+            // EndpointResult::Ok
         }
-        Ok(Err(_err)) => EndpointResult::ReadError,
-        Err(_err) => EndpointResult::Timeout,
+        Ok(Err(_err)) => {
+            // EndpointResult::ReadError,
+            -1
+        }
+        Err(_err) => {
+            // EndpointResult::Timeout,
+            -2
+        }
     }
 }
 
