@@ -76,37 +76,36 @@ pub fn recv_stream_read(
 pub fn recv_stream_read_timeout(
     stream: &mut repr_c::Box<RecvStream>,
     mut data: slice::slice_mut<'_, u8>,
-    bytes_read: &mut usize,
-    _timeout_ms: u64,
-) -> EndpointResult {
-    // let timeout = Duration::from_millis(timeout_ms);
+    // bytes_read: &mut u64,
+    timeout_ms: u64,
+    // ) -> EndpointResult {
+) -> i64 {
+    let timeout = Duration::from_millis(timeout_ms);
 
     let res = TOKIO_EXECUTOR.block_on(async move {
-        // tokio::time::timeout(timeout, async move {
-        stream
-            .stream
-            .as_mut()
-            .expect("sendstream not initialized")
-            .read(&mut data)
-            .await
-        // })
-        // .await
+        tokio::time::timeout(timeout, async move {
+            stream
+                .stream
+                .as_mut()
+                .expect("sendstream not initialized")
+                .read(&mut data)
+                .await
+        })
+        .await
     });
 
     match res {
-        // Ok(Ok(read)) => {
-        //     *bytes_read = read.unwrap_or(0);
-        //     EndpointResult::Ok
-        // }
-        // Ok(Err(_err)) => EndpointResult::ReadError,
-        // Err(_err) => EndpointResult::Timeout,
-        Ok(read) => {
-            *bytes_read = read.unwrap_or(0);
-            EndpointResult::Ok
+        Ok(Ok(read)) => {
+            // *bytes_read = read.unwrap_or(0) as u64;
+            read.unwrap_or(0) as i64
         }
-        Err(err) => {
-            println!("RECV_STREAM_READ_TIMEOUT ERR: {err:?}");
-            EndpointResult::ReadError
+        Ok(Err(_err)) => {
+            -1
+            // EndpointResult::ReadError,
+        }
+        Err(_err) => {
+            -2
+            // EndpointResult::Timeout,
         }
     }
 }
