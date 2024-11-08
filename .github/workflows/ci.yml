@@ -222,7 +222,6 @@ jobs:
                 $relay = $json_output.relay
                 $addrs = $json_output.addrs
                 & "./main" "client" $node_id $relay $addrs
-                Start-Sleep -Seconds 10
 
                 # wait for the server process to terminate
                 Wait-Process -InputObject $server_process
@@ -238,6 +237,7 @@ jobs:
                 # }
 
                 # Read the 3rd line of the file
+                Write-Output "checking first data transfer:"
                 $last_line = Get-Content server_output.json | Select-Object -Index 2
                 # Parse the JSON
                 $json_output = ConvertFrom-Json $last_line
@@ -248,6 +248,7 @@ jobs:
                     exit 1
                 }
 
+                Write-Output "checking second data transfer:"
                 # Repeat for the 6th line of the file
                 $last_line = Get-Content server_output.json | Select-Object -Index 5
                 # Parse the JSON

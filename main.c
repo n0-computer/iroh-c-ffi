@@ -64,7 +64,11 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   Connection_t * conn = connection_default();
   int res = endpoint_accept(&ep, alpn_slice, &conn);
   if (res != 0) {
-    fprintf(stderr, "failed to accept connection");
+    if (json_output) {
+      printf("{ \"type\": \"server\", \"status\": \"endpoint accept: failed\": \"data\": \"%d\" }\n", res);
+    } else {
+      fprintf(stderr, "failed to accept connection");
+    }
     return -1;
   }
 
@@ -72,7 +76,11 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   RecvStream_t * recv_stream = recv_stream_default();
   res = connection_accept_uni(&conn, &recv_stream);
   if (res != 0) {
-    fprintf(stderr, "failed to accept stream");
+    if (json_output) {
+      printf("{ \"type\": \"server\", \"status\": \"connection accept: failed\": \"data\": \"%d\" }\n", res);
+    } else {
+      fprintf(stderr, "failed to accept stream");
+    }
     return -1;
   }
 
@@ -81,8 +89,12 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   recv_buffer_slice.ptr = recv_buffer;
   recv_buffer_slice.len = 512;
   int read = recv_stream_read(&recv_stream, recv_buffer_slice);
-  if (read == -1) {
-    fprintf(stderr, "failed to read data");
+  if (read == 1) {
+    if (json_output) {
+      printf("{ \"type\": \"server\", \"status\": \"received failed\", \"data\": \"%d\" }\n", read);
+    } else {
+      fprintf(stderr, "failed to read data"); 
+    }
     return -1;
   }
 
@@ -113,6 +125,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   // Accept bi directional connection
   if (json_output) {
     printf("{ \"type\": \"server\", \"status\": \"accepting bi\" }\n");
+    fflush(stdout);
   } else {
     printf("accepting bi\n");
   }
@@ -120,29 +133,50 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   SendStream_t * send_stream = send_stream_default();
   res = connection_accept_bi(&conn, &send_stream,&recv_stream);
   if (res != 0) {
-    fprintf(stderr, "failed to accept stream");
+    if (json_output) {
+      printf("{ \"type\": \"server\", \"status\": \"receiving data\" }\n");
+      fflush(stdout);
+    } else {
+      fprintf(stderr, "failed to accept stream");
+    }
     return -1;
   }
 
   if (json_output) {
     printf("{ \"type\": \"server\", \"status\": \"receiving data\" }\n");
+    fflush(stdout);
   } else {
     printf("receiving data\n");
   }
-  read = recv_stream_read(&recv_stream, recv_buffer_slice);
-  if (read == -1) {
-    fprintf(stderr, "failed to read data");
+  // unsigned long long bytes_read = 0;
+  // int err = recv_stream_read_timeout(&recv_stream, recv_buffer_slice, &bytes_read, 5000);
+  int bytes_read = recv_stream_read_timeout(&recv_stream, recv_buffer_slice, 5000);
+  if (bytes_read < 0) {
+    if (json_output) {
+      printf("{ \"type\": \"server\", \"status\": \"stream read timeout\", \"data\": \"%d\" }\n", bytes_read);
+      fflush(stdout);
+    } else {
+      if (bytes_read == -2) {
+        fprintf(stderr, "failed to read data before timeout");
+      } else if (bytes_read == -1) {
+        fprintf(stderr, "failed to read data");
+      } else {
+        fprintf(stderr, "Endpoint Result Error: %d", bytes_read);
+      }
+    }
+        
     return -1;
   }
 
   // assume they sent us a nice string
-  recv_str = malloc(read + 1);
-  memcpy(recv_str, recv_buffer, read);
-  recv_str[read] = '\0';
+  recv_str = malloc(bytes_read + 1);
+  memcpy(recv_str, recv_buffer, bytes_read);
+  recv_str[bytes_read] = '\0';
   if (json_output) {
     printf("{ \"type\": \"server\", \"status\": \"received\", \"data\": \"%s\" }\n", recv_str);
+    fflush(stdout);
   } else {
-    printf("received: '%s'\n", recv_str);
+    printf("received: '%s'\n%d bytes\n", recv_str, bytes_read);
   }
 
   // send response
@@ -151,29 +185,60 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   buffer.len = strlen(recv_str);
   if (json_output) {
     printf("{ \"type\": \"server\", \"status\": \"sending data\" }\n");
+    fflush(stdout);
   } else {
     printf("sending data\n");
   }
-  int ret = send_stream_write(&send_stream, buffer);
+
+  int ret = send_stream_write_timeout(&send_stream, buffer, 10000);
   if (ret != 0) {
-    fprintf(stderr, "failed to send data\n");
+    if (json_output) {
+      printf("{ \"type\": \"server\", \"status\": \"stream write timeout\", \"data\": \"%d\" }\n", ret);
+      fflush(stdout);
+    } else {
+      if (ret == ENDPOINT_RESULT_TIMEOUT) {
+        fprintf(stderr, "failed to send data before timeout");
+      } else if (ret == ENDPOINT_RESULT_READ_ERROR) {
+        fprintf(stderr, "failed to send data");
+      } else {
+        fprintf(stderr, "Endpoint Result Error: %d", ret);
+      }
+    }
     return -1;
   }
+
+  if (json_output) {
+     printf("{ \"type\": \"server\", \"status\": \"sent data\"}\n");
+  } else {
+      printf("server sent write data\n");
+  }
+  fflush(stdout);
 
   // finish
   ret = send_stream_finish(send_stream);
   if (ret != 0) {
-    fprintf(stderr, "failed to finish sending\n");
+    if (json_output) {
+      printf("{ \"type\": \"server\", \"status\": \"stream finish error\", \"data\": \"%d\" }\n", ret);
+      fflush(stdout);
+    } else {
+      fprintf(stderr, "failed to finish sending\n");
+    }
     return -1;
   }
 
   // wait for the receiving side to close the connection
-  printf("waiting for connection to close");
+  printf("waiting for connection to close\n");
   ret = connection_closed(conn);
   if (ret != 0) {
-    fprintf(stderr, "failed to close connection cleanly\n");
+    if (json_output) {
+      printf("{ \"type\": \"server\", \"status\": \"connection close err\", \"data\": \"%d\" }\n", ret);
+      fflush(stdout);
+    } else {
+      fprintf(stderr, "failed to close connection cleanly\n");
+    }
     return -1;
   }
+  printf("connection closed\n");
 
   fflush(stdout);
 
@@ -185,7 +250,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   rust_free_string(node_id_str);
   node_addr_free(node_addr);
   endpoint_free(ep);
-
+  printf("endpoint freed\n");
   return 0;
 }
 
@@ -323,6 +388,8 @@ run_client (
   recv_str[read] = '\0';
   printf("received: '%s'\n", recv_str);
 
+  fflush(stdout);
+
   // finish
   ret = send_stream_finish(send_stream);
   if (ret != 0) {
@@ -333,7 +400,15 @@ run_client (
   // indicate to the server that you want to close the connection
   printf("closing connection\n");
   connection_close(conn);
-  printf("connection closed");
+  printf("connection closed\n");
+
+  // gracefully close the endpoint. This will wait until all the connections have closed gracefully, ensure the server receives a `CONNECTION_CLOSE`, so it can also cleanly close.
+
+  printf("closing endpoint\n");
+  endpoint_close(ep);
+  printf("endpoint closed\n");
+
+  fflush(stdout);
 
   // cleanup
   free(recv_str);

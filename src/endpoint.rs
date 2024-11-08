@@ -855,6 +855,32 @@ pub fn endpoint_connect(
     }
 }
 
+/// Closes the endpoint.
+///
+/// It blocks all incoming connections and then waits for all current connections
+/// to close gracefully, before shutting down the endpoint.
+///
+/// Consumes the endpoint, no need to free it afterwards.
+#[ffi_export]
+pub fn endpoint_close(ep: repr_c::Box<Endpoint>) -> EndpointResult {
+    let res = TOKIO_EXECUTOR.block_on(async move {
+        ep.ep
+            .write()
+            .await
+            .take()
+            .expect("endpoint not initialized")
+            .close(CLOSE_CODE, b"finished")
+            .await
+    });
+    match res {
+        Ok(()) => EndpointResult::Ok,
+        Err(err) => {
+            dbg!(err);
+            EndpointResult::CloseError
+        }
+    }
+}
+
 /// Get the the node dialing information of this iroh endpoint.
 #[ffi_export]
 pub fn endpoint_node_addr(ep: &repr_c::Box<Endpoint>, out: &mut NodeAddr) -> EndpointResult {

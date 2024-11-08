@@ -63,6 +63,51 @@ pub fn recv_stream_read(
     }
 }
 
+/// Receive data on this stream and return with an error if reading exceeds the
+/// given timeout.
+///
+/// Blocks the current thread.
+///
+/// On success, returns how many bytes were read in the `bytes_read` parameter.
+#[ffi_export]
+pub fn recv_stream_read_timeout(
+    stream: &mut repr_c::Box<RecvStream>,
+    mut data: slice::slice_mut<'_, u8>,
+    // bytes_read: &mut u64,
+    timeout_ms: u64,
+    // ) -> EndpointResult {
+) -> i64 {
+    let timeout = Duration::from_millis(timeout_ms);
+
+    let res = TOKIO_EXECUTOR.block_on(async move {
+        tokio::time::timeout(timeout, async move {
+            stream
+                .stream
+                .as_mut()
+                .expect("sendstream not initialized")
+                .read(&mut data)
+                .await
+        })
+        .await
+    });
+
+    match res {
+        Ok(Ok(read)) => {
+            read.unwrap_or(0) as i64
+            // *bytes_read = read.unwrap_or(0) as i64
+            // EndpointResult::Ok
+        }
+        Ok(Err(_err)) => {
+            // EndpointResult::ReadError,
+            -1
+        }
+        Err(_err) => {
+            // EndpointResult::Timeout,
+            -2
+        }
+    }
+}
+
 /// Receive data on this stream.
 ///
 /// Size limit specifies how much data at most is read.
@@ -152,6 +197,36 @@ pub fn send_stream_write(
     match res {
         Ok(()) => EndpointResult::Ok,
         Err(_err) => EndpointResult::SendError,
+    }
+}
+
+/// Send data on the stream, returning an error if the data was not written
+/// before the given timeout.
+///
+/// Blocks the current thread.
+#[ffi_export]
+pub fn send_stream_write_timeout(
+    stream: &mut repr_c::Box<SendStream>,
+    data: slice::slice_ref<'_, u8>,
+    timeout_ms: u64,
+) -> EndpointResult {
+    let timeout = Duration::from_millis(timeout_ms);
+    let res = TOKIO_EXECUTOR.block_on(async move {
+        tokio::time::timeout(timeout, async move {
+            stream
+                .stream
+                .as_mut()
+                .expect("sendstream not initialized")
+                .write_all(&data)
+                .await
+        })
+        .await
+    });
+
+    match res {
+        Ok(Ok(())) => EndpointResult::Ok,
+        Ok(Err(_err)) => EndpointResult::SendError,
+        Err(_err) => EndpointResult::Timeout,
     }
 }
 
