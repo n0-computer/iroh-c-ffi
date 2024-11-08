@@ -79,7 +79,6 @@ pub fn recv_stream_read_timeout(
     bytes_read: &mut u64,
     timeout_ms: u64,
 ) -> EndpointResult {
-    // ) -> i64 {
     let timeout = Duration::from_millis(timeout_ms);
 
     let res = TOKIO_EXECUTOR.block_on(async move {
@@ -98,16 +97,9 @@ pub fn recv_stream_read_timeout(
         Ok(Ok(read)) => {
             *bytes_read = read.unwrap_or(0) as u64;
             EndpointResult::Ok
-            // read.unwrap_or(0) as i64
         }
-        Ok(Err(_err)) => {
-            // -1
-            EndpointResult::ReadError
-        }
-        Err(_err) => {
-            // -2
-            EndpointResult::Timeout
-        }
+        Ok(Err(_err)) => EndpointResult::ReadError,
+        Err(_err) => EndpointResult::Timeout,
     }
 }
 
