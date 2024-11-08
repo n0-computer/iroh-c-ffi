@@ -855,7 +855,10 @@ pub fn endpoint_connect(
     }
 }
 
-/// Wait for all connections to close and then shut down the endpoint. It will then wait for all connections to actually be shutdown, and afterwards close the magic socket.
+/// Closes the endpoint.
+///
+/// It blocks all incoming connections and then waits for all current connections
+/// to close gracefully, before shutting down the endpoint.
 ///
 /// Consumes the endpoint, no need to free it afterwards.
 #[ffi_export]
