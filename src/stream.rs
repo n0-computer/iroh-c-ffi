@@ -59,10 +59,7 @@ pub fn recv_stream_read(
 
     match res {
         Ok(read) => read.unwrap_or(0) as i64,
-        Err(err) => {
-            println!("RECV_STREAM_READ ERROR: {err:?}");
-            -1
-        }
+        Err(_err) => -1,
     }
 }
 
