@@ -148,19 +148,19 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   } else {
     printf("receiving data\n");
   }
-  // int bytes_read = 0;
-  int bytes_read = recv_stream_read_timeout(&recv_stream, recv_buffer_slice, 5000);
-  if (bytes_read < 0) {
+  unsigned long long bytes_read = 0;
+  int err = recv_stream_read_timeout(&recv_stream, recv_buffer_slice, &bytes_read, 5000);
+  if (err < 0) {
     if (json_output) {
-      printf("{ \"type\": \"server\", \"status\": \"stream read timeout\", \"data\": \"%d\" }\n", bytes_read);
+      printf("{ \"type\": \"server\", \"status\": \"stream read timeout\", \"data\": \"%d\" }\n", err);
       fflush(stdout);
     } else {
-      if (bytes_read == -2) {
+      if (err == ENDPOINT_RESULT_TIMEOUT) {
         fprintf(stderr, "failed to read data before timeout");
-      } else if (bytes_read == -1) {
+      } else if (err == ENDPOINT_RESULT_READ_ERROR) {
         fprintf(stderr, "failed to read data");
       } else {
-        fprintf(stderr, "Endpoint Result Error: %d", bytes_read);
+        fprintf(stderr, "Endpoint Result Error: %d", err);
       }
     }
         
@@ -175,7 +175,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
     printf("{ \"type\": \"server\", \"status\": \"received\", \"data\": \"%s\" }\n", recv_str);
     fflush(stdout);
   } else {
-    printf("received: '%s'\n%d bytes\n", recv_str, bytes_read);
+    printf("received: '%s'\n%llu bytes\n", recv_str, bytes_read);
   }
 
   // send response

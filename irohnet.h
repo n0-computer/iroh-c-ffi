@@ -831,10 +831,11 @@ recv_stream_read (
  *
  *  On success, returns how many bytes were read in the `bytes_read` parameter.
  */
-int64_t
+EndpointResult_t
 recv_stream_read_timeout (
     RecvStream_t * * stream,
     slice_mut_uint8_t data,
+    uint64_t * bytes_read,
     uint64_t timeout_ms);
 
 /** \brief
