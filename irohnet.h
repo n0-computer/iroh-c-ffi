@@ -459,6 +459,15 @@ endpoint_bind (
     Endpoint_t * const * out);
 
 /** \brief
+ *  Wait for all connections to close and then shut down the endpoint. It will then wait for all connections to actually be shutdown, and afterwards close the magic socket.
+ *
+ *  Consumes the endpoint, no need to free it afterwards.
+ */
+EndpointResult_t
+endpoint_close (
+    Endpoint_t * ep);
+
+/** \brief
  *  Add the given ALPN to the list of accepted ALPNs.
  */
 void

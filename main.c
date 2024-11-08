@@ -210,7 +210,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   if (json_output) {
      printf("{ \"type\": \"server\", \"status\": \"sent data\"}\n");
   } else {
-      printf("server sent write data");
+      printf("server sent write data\n");
   }
   fflush(stdout);
 
@@ -227,7 +227,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   }
 
   // wait for the receiving side to close the connection
-  printf("waiting for connection to close");
+  printf("waiting for connection to close\n");
   ret = connection_closed(conn);
   if (ret != 0) {
     if (json_output) {
@@ -238,6 +238,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
     }
     return -1;
   }
+  printf("connection closed\n");
 
   fflush(stdout);
 
@@ -249,7 +250,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   rust_free_string(node_id_str);
   node_addr_free(node_addr);
   endpoint_free(ep);
-
+  printf("endpoint freed\n");
   return 0;
 }
 
@@ -399,7 +400,13 @@ run_client (
   // indicate to the server that you want to close the connection
   printf("closing connection\n");
   connection_close(conn);
-  printf("connection closed");
+  printf("connection closed\n");
+
+  // gracefully close the endpoint. This will wait until all the connections have closed gracefully, ensure the server receives a `CONNECTION_CLOSE`, so it can also cleanly close.
+
+  printf("closing endpoint\n");
+  endpoint_close(ep);
+  printf("endpoint closed\n");
 
   fflush(stdout);
 
