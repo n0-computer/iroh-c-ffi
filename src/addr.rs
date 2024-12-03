@@ -1,4 +1,4 @@
-use iroh_net::{relay::RelayUrl, ticket::NodeTicket};
+use iroh::{relay::RelayUrl, ticket::NodeTicket};
 use safer_ffi::{prelude::*, vec};
 
 use crate::key::PublicKey;
@@ -18,18 +18,18 @@ pub struct NodeAddr {
 
 impl PartialEq for NodeAddr {
     fn eq(&self, other: &Self) -> bool {
-        let a: iroh_net::NodeAddr = self.clone().into();
-        let b: iroh_net::NodeAddr = other.clone().into();
+        let a: iroh::NodeAddr = self.clone().into();
+        let b: iroh::NodeAddr = other.clone().into();
         a.eq(&b)
     }
 }
 
-impl From<NodeAddr> for iroh_net::endpoint::NodeAddr {
+impl From<NodeAddr> for iroh::endpoint::NodeAddr {
     fn from(addr: NodeAddr) -> Self {
         let direct_addresses = addr.direct_addresses.iter().map(|a| a.addr).collect();
-        iroh_net::endpoint::NodeAddr {
+        iroh::endpoint::NodeAddr {
             node_id: addr.node_id.into(),
-            info: iroh_net::endpoint::AddrInfo {
+            info: iroh::endpoint::AddrInfo {
                 relay_url: addr
                     .relay_url
                     .map(|u| u.url.clone().expect("url not initialized")),
@@ -39,8 +39,8 @@ impl From<NodeAddr> for iroh_net::endpoint::NodeAddr {
     }
 }
 
-impl From<iroh_net::endpoint::NodeAddr> for NodeAddr {
-    fn from(addr: iroh_net::endpoint::NodeAddr) -> Self {
+impl From<iroh::endpoint::NodeAddr> for NodeAddr {
+    fn from(addr: iroh::endpoint::NodeAddr) -> Self {
         let direct_addresses = addr
             .info
             .direct_addresses
@@ -101,7 +101,7 @@ pub fn node_addr_from_string(input: char_p::Ref<'_>, out: &mut NodeAddr) -> Addr
 /// Result must be freed with `rust_free_string`
 #[ffi_export]
 pub fn node_addr_as_str(addr: &NodeAddr) -> char_p::Box {
-    let addr: iroh_net::NodeAddr = addr.clone().into();
+    let addr: iroh::NodeAddr = addr.clone().into();
     NodeTicket::new(addr).to_string().try_into().unwrap()
 }
 
