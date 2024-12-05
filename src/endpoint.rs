@@ -3,12 +3,12 @@ use std::ops::Deref;
 use std::time::Duration;
 
 use anyhow::Context;
-use iroh_net::discovery::Discovery;
-use iroh_net::discovery::{
+use iroh::discovery::Discovery;
+use iroh::discovery::{
     dns::DnsDiscovery, local_swarm_discovery::LocalSwarmDiscovery, pkarr::PkarrPublisher,
     ConcurrentDiscovery,
 };
-use iroh_net::NodeId;
+use iroh::NodeId;
 use quinn::{ConnectionError, VarInt};
 use safer_ffi::{prelude::*, slice, vec};
 use tokio::sync::RwLock;
@@ -42,11 +42,11 @@ pub enum RelayMode {
     Default,
 }
 
-impl From<RelayMode> for iroh_net::relay::RelayMode {
+impl From<RelayMode> for iroh::endpoint::RelayMode {
     fn from(value: RelayMode) -> Self {
         match value {
-            RelayMode::Disabled => iroh_net::relay::RelayMode::Disabled,
-            RelayMode::Default => iroh_net::relay::RelayMode::Default,
+            RelayMode::Disabled => iroh::endpoint::RelayMode::Disabled,
+            RelayMode::Default => iroh::endpoint::RelayMode::Default,
         }
     }
 }
@@ -145,7 +145,7 @@ pub fn endpoint_network_change(ep: &repr_c::Box<Endpoint>) {
 #[derive_ReprC]
 #[repr(opaque)]
 pub struct Endpoint {
-    ep: RwLock<Option<iroh_net::endpoint::Endpoint>>,
+    ep: RwLock<Option<iroh::endpoint::Endpoint>>,
 }
 
 #[derive(Debug)]
@@ -247,7 +247,7 @@ pub fn endpoint_bind(
     );
 
     TOKIO_EXECUTOR.block_on(async move {
-        let mut builder = iroh_net::endpoint::Builder::default()
+        let mut builder = iroh::endpoint::Builder::default()
             .relay_mode(config.relay_mode.into())
             .alpns(alpn_protocols)
             .secret_key(config.secret_key.deref().into());
@@ -283,9 +283,9 @@ pub fn endpoint_bind(
 }
 
 fn make_discovery_config(
-    secret_key: iroh_net::key::SecretKey,
+    secret_key: iroh::key::SecretKey,
     discovery_config: DiscoveryConfig,
-) -> Option<iroh_net::discovery::ConcurrentDiscovery> {
+) -> Option<iroh::discovery::ConcurrentDiscovery> {
     let services = match discovery_config {
         DiscoveryConfig::None => None,
         DiscoveryConfig::DNS => Some(make_dns_discovery(&secret_key)),
@@ -303,7 +303,7 @@ fn make_discovery_config(
     services.map(ConcurrentDiscovery::from_services)
 }
 
-fn make_dns_discovery(secret_key: &iroh_net::key::SecretKey) -> Vec<Box<dyn Discovery>> {
+fn make_dns_discovery(secret_key: &iroh::key::SecretKey) -> Vec<Box<dyn Discovery>> {
     vec![
         Box::new(DnsDiscovery::n0_dns()),
         Box::new(PkarrPublisher::n0_dns(secret_key.clone())),
@@ -604,7 +604,7 @@ pub fn endpoint_accept(
 
 async fn accept_conn(
     ep: &repr_c::Box<Endpoint>,
-) -> Result<(Vec<u8>, iroh_net::endpoint::Connection), AcceptError> {
+) -> Result<(Vec<u8>, iroh::endpoint::Connection), AcceptError> {
     let mut conn = ep
         .ep
         .read()
@@ -869,7 +869,7 @@ pub fn endpoint_close(ep: repr_c::Box<Endpoint>) -> EndpointResult {
             .await
             .take()
             .expect("endpoint not initialized")
-            .close(CLOSE_CODE, b"finished")
+            .close()
             .await
     });
     match res {
