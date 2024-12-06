@@ -57,7 +57,7 @@ jobs:
                 cargo run --features headers --bin generate_headers --release
             - name: build test binary
               run: |
-                cc -o main{,.c} -L target/release -l iroh_net_ffi -lc -lm
+                cc -o main{,.c} -L target/release -l iroh_c_ffi -lc -lm
               env:
                 LD_LIBRARY_PATH: target/release
             - name: test run
@@ -149,7 +149,7 @@ jobs:
                     exit 1
                 fi
               env:
-                CARGO_CRATE_NAME: iroh_net_ffi
+                CARGO_CRATE_NAME: iroh_c_ffi
 
     build_and_test_windows:
         name: Build and test
@@ -195,8 +195,8 @@ jobs:
                 cargo run --features headers --bin generate_headers --release --target ${{ matrix.target }}
             - name: build test binary
               run: |
-                cp target/x86_64-pc-windows-gnu/release/iroh_net_ffi.dll iroh_net_ffi.dll
-                gcc -o main.exe main.c -L target/x86_64-pc-windows-gnu/release -liroh_net_ffi -lm -lkernel32 -ladvapi32 -lbcrypt -lntdll -luserenv -lws2_32 -lmsvcrt
+                cp target/x86_64-pc-windows-gnu/release/iroh_c_ffi.dll iroh_c_ffi.dll
+                gcc -o main.exe main.c -L target/x86_64-pc-windows-gnu/release -liroh_c_ffi -lm -lkernel32 -ladvapi32 -lbcrypt -lntdll -luserenv -lws2_32 -lmsvcrt
               env:
                 LD_LIBRARY_PATH: target/release
             - name: test run
