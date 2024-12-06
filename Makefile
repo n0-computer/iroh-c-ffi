@@ -1,6 +1,6 @@
 CC = cc
 CFLAGS = -Wall -g
-LDFLAGS = -L ./target/debug -l iroh_net_ffi -lSystem -lc -lm
+LDFLAGS = -L ./target/debug -l iroh_c_ffi -lSystem -lc -lm
 
 all: main multi-thread-client multi-thread-server single-thread-server
 main: main.o

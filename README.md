@@ -1,13 +1,13 @@
-# iroh-net-ffi
+# iroh `C` FFI
 
-> FFI bindings for [iroh-net](https://crates.io/crates/iroh-net).
+> FFI bindings for [iroh](https://crates.io/crates/iroh).
 
 
 ## Running Example
 
 ```
 > cargo build
-> cc -o main{,.c} -L target/debug -l iroh_net_ffi -lSystem -lc -lm
+> cc -o main{,.c} -L target/debug -l iroh_c_ffi -lSystem -lc -lm
 
 # Server
 > ./main server

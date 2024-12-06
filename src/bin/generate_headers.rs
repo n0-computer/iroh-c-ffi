@@ -1,3 +1,3 @@
 fn main() -> std::io::Result<()> {
-    iroh_net_ffi::generate_headers()
+    iroh_c_ffi::generate_headers()
 }

@@ -7,8 +7,8 @@
  *                                         *
  *******************************************/
 
-#ifndef __RUST_IROH_NET_FFI__
-#define __RUST_IROH_NET_FFI__
+#ifndef __RUST_IROH_C_FFI__
+#define __RUST_IROH_C_FFI__
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -605,7 +605,7 @@ endpoint_node_addr (
 /** \brief
  *  Enables tracing for iroh.
  *
- *  Log level can be controlled using the env variable `IROH_NET_LOG`.
+ *  Log level can be controlled using the env variable `IROH_C_LOG`.
  */
 void
 iroh_enable_tracing (void);
@@ -1098,4 +1098,4 @@ url_from_string (
 } /* extern \"C\" */
 #endif
 
-#endif /* __RUST_IROH_NET_FFI__ */
+#endif /* __RUST_IROH_C_FFI__ */

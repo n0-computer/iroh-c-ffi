@@ -31,7 +31,7 @@ pub fn rust_buffer_free(buf: vec::Vec<u8>) {
 
 /// Enables tracing for iroh.
 ///
-/// Log level can be controlled using the env variable `IROH_NET_LOG`.
+/// Log level can be controlled using the env variable `IROH_C_LOG`.
 #[ffi_export]
 pub fn iroh_enable_tracing() {
     tracing_subscriber::registry()
@@ -39,6 +39,6 @@ pub fn iroh_enable_tracing() {
             tracing_subscriber::fmt::layer()
                 .event_format(tracing_subscriber::fmt::format().with_line_number(true)),
         )
-        .with(EnvFilter::from_env("IROH_NET_LOG"))
+        .with(EnvFilter::from_env("IROH_C_LOG"))
         .init();
 }
