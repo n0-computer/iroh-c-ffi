@@ -1,4 +1,5 @@
-use iroh::{relay::RelayUrl, ticket::NodeTicket};
+use iroh::RelayUrl;
+use iroh_base::ticket::NodeTicket;
 use safer_ffi::{prelude::*, vec};
 
 use crate::key::PublicKey;
@@ -24,25 +25,22 @@ impl PartialEq for NodeAddr {
     }
 }
 
-impl From<NodeAddr> for iroh::endpoint::NodeAddr {
+impl From<NodeAddr> for iroh::NodeAddr {
     fn from(addr: NodeAddr) -> Self {
         let direct_addresses = addr.direct_addresses.iter().map(|a| a.addr).collect();
-        iroh::endpoint::NodeAddr {
+        iroh::NodeAddr {
             node_id: addr.node_id.into(),
-            info: iroh::endpoint::AddrInfo {
-                relay_url: addr
-                    .relay_url
-                    .map(|u| u.url.clone().expect("url not initialized")),
-                direct_addresses,
-            },
+            relay_url: addr
+                .relay_url
+                .map(|u| u.url.clone().expect("url not initialized")),
+            direct_addresses,
         }
     }
 }
 
-impl From<iroh::endpoint::NodeAddr> for NodeAddr {
-    fn from(addr: iroh::endpoint::NodeAddr) -> Self {
+impl From<iroh::NodeAddr> for NodeAddr {
+    fn from(addr: iroh::NodeAddr) -> Self {
         let direct_addresses = addr
-            .info
             .direct_addresses
             .into_iter()
             .map(|addr| Box::new(SocketAddr { addr }).into())
@@ -51,7 +49,6 @@ impl From<iroh::endpoint::NodeAddr> for NodeAddr {
         NodeAddr {
             node_id: addr.node_id.into(),
             relay_url: addr
-                .info
                 .relay_url
                 .map(|url| Box::new(Url { url: Some(url) }).into()),
             direct_addresses,

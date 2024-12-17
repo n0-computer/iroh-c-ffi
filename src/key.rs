@@ -32,10 +32,7 @@ pub fn public_key_free(_key: PublicKey) {
 /// Result must be freed using `rust_free_string`
 #[ffi_export]
 pub fn public_key_as_base32(key: &PublicKey) -> char_p::Box {
-    iroh::key::PublicKey::from(key)
-        .to_string()
-        .try_into()
-        .unwrap()
+    iroh::PublicKey::from(key).to_string().try_into().unwrap()
 }
 
 /// Generate a default (invalid) public key.
@@ -49,7 +46,7 @@ pub fn public_key_default() -> PublicKey {
 /// Parses the public key from a base32 string.
 #[ffi_export]
 pub fn public_key_from_base32(raw_key: char_p::Ref<'_>, out: &mut PublicKey) -> KeyResult {
-    let key: Result<iroh::key::PublicKey, _> = raw_key.to_str().parse();
+    let key: Result<iroh::PublicKey, _> = raw_key.to_str().parse();
 
     match key {
         Ok(key) => {
@@ -60,23 +57,23 @@ pub fn public_key_from_base32(raw_key: char_p::Ref<'_>, out: &mut PublicKey) -> 
     }
 }
 
-impl From<iroh::key::PublicKey> for PublicKey {
-    fn from(key: iroh::key::PublicKey) -> Self {
+impl From<iroh::PublicKey> for PublicKey {
+    fn from(key: iroh::PublicKey) -> Self {
         PublicKey {
             key: *key.as_bytes(),
         }
     }
 }
 
-impl From<PublicKey> for iroh::key::PublicKey {
+impl From<PublicKey> for iroh::PublicKey {
     fn from(key: PublicKey) -> Self {
-        iroh::key::PublicKey::try_from(&key.key).unwrap()
+        iroh::PublicKey::try_from(&key.key).unwrap()
     }
 }
 
-impl From<&PublicKey> for iroh::key::PublicKey {
+impl From<&PublicKey> for iroh::PublicKey {
     fn from(key: &PublicKey) -> Self {
-        iroh::key::PublicKey::try_from(&key.key).unwrap()
+        iroh::PublicKey::try_from(&key.key).unwrap()
     }
 }
 
@@ -85,7 +82,7 @@ impl From<&PublicKey> for iroh::key::PublicKey {
 #[repr(opaque)]
 #[derive(Debug, Clone)]
 pub struct SecretKey {
-    key: iroh::key::SecretKey,
+    key: iroh::SecretKey,
 }
 
 /// Free the passed in key.
@@ -100,7 +97,7 @@ pub fn secret_key_free(key: repr_c::Box<SecretKey>) {
 #[ffi_export]
 pub fn secret_key_default() -> repr_c::Box<SecretKey> {
     Box::new(SecretKey {
-        key: iroh::key::SecretKey::generate(),
+        key: iroh::SecretKey::generate(rand::thread_rng()),
     })
     .into()
 }
@@ -111,7 +108,7 @@ pub fn secret_key_from_base32(
     raw_key: char_p::Ref<'_>,
     out: &mut repr_c::Box<SecretKey>,
 ) -> KeyResult {
-    let key: Result<iroh::key::SecretKey, _> = raw_key.to_str().parse();
+    let key: Result<iroh::SecretKey, _> = raw_key.to_str().parse();
 
     match key {
         Ok(key) => {
@@ -128,7 +125,7 @@ pub fn secret_key_from_base32(
 #[ffi_export]
 pub fn secret_key_generate() -> repr_c::Box<SecretKey> {
     Box::new(SecretKey {
-        key: iroh::key::SecretKey::generate(),
+        key: iroh::SecretKey::generate(rand::thread_rng()),
     })
     .into()
 }
@@ -149,19 +146,19 @@ pub fn secret_key_public(key: &SecretKey) -> PublicKey {
     key.key.public().into()
 }
 
-impl From<iroh::key::SecretKey> for SecretKey {
-    fn from(key: iroh::key::SecretKey) -> Self {
+impl From<iroh::SecretKey> for SecretKey {
+    fn from(key: iroh::SecretKey) -> Self {
         SecretKey { key }
     }
 }
 
-impl From<SecretKey> for iroh::key::SecretKey {
+impl From<SecretKey> for iroh::SecretKey {
     fn from(key: SecretKey) -> Self {
         key.key
     }
 }
 
-impl From<&SecretKey> for iroh::key::SecretKey {
+impl From<&SecretKey> for iroh::SecretKey {
     fn from(key: &SecretKey) -> Self {
         key.key.clone()
     }
