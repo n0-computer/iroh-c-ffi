@@ -283,7 +283,7 @@ pub fn endpoint_bind(
 }
 
 fn make_discovery_config(
-    secret_key: iroh::key::SecretKey,
+    secret_key: iroh::SecretKey,
     discovery_config: DiscoveryConfig,
 ) -> Option<iroh::discovery::ConcurrentDiscovery> {
     let services = match discovery_config {
@@ -303,7 +303,7 @@ fn make_discovery_config(
     services.map(ConcurrentDiscovery::from_services)
 }
 
-fn make_dns_discovery(secret_key: &iroh::key::SecretKey) -> Vec<Box<dyn Discovery>> {
+fn make_dns_discovery(secret_key: &iroh::SecretKey) -> Vec<Box<dyn Discovery>> {
     vec![
         Box::new(DnsDiscovery::n0_dns()),
         Box::new(PkarrPublisher::n0_dns(secret_key.clone())),
