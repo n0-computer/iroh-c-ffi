@@ -19,8 +19,8 @@ required-features = ["headers"]  # Do not build unless generating headers.
 [dependencies]
 anyhow = "1.0.79"
 bytes = "1.5.0"
-iroh = { version = "0.30", features = ["discovery-local-network"] }
-iroh-base = { version = "0.30", features = ["ticket"] }
+iroh = { version = "0.31", features = ["discovery-local-network"] }
+iroh-base = { version = "0.31", features = ["ticket"] }
 once_cell = "1.19.0"
 quinn = { version = "0.12", package = "iroh-quinn" }
 rand = "0.8.5"
@@ -34,8 +34,3 @@ url = "2.5.0"
 [features]
 # generate headers
 headers = ["safer-ffi/headers"]
-
-[patch.crates-io]
-
-iroh = { git = "https://github.com/n0-computer/iroh.git", branch = "iroh-0-31-0" }
-iroh-base = { git = "https://github.com/n0-computer/iroh.git", branch = "iroh-0-31-0" }
