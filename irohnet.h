@@ -466,7 +466,7 @@ endpoint_bind (
  *
  *  Consumes the endpoint, no need to free it afterwards.
  */
-EndpointResult_t
+void
 endpoint_close (
     Endpoint_t * ep);
 

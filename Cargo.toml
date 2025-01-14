@@ -34,3 +34,8 @@ url = "2.5.0"
 [features]
 # generate headers
 headers = ["safer-ffi/headers"]
+
+[patch.crates-io]
+
+iroh = { git = "https://github.com/n0-computer/iroh.git", branch = "iroh-0-31-0" }
+iroh-base = { git = "https://github.com/n0-computer/iroh.git", branch = "iroh-0-31-0" }
