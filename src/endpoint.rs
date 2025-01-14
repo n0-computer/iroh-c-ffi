@@ -862,8 +862,8 @@ pub fn endpoint_connect(
 ///
 /// Consumes the endpoint, no need to free it afterwards.
 #[ffi_export]
-pub fn endpoint_close(ep: repr_c::Box<Endpoint>) -> EndpointResult {
-    let res = TOKIO_EXECUTOR.block_on(async move {
+pub fn endpoint_close(ep: repr_c::Box<Endpoint>) {
+    TOKIO_EXECUTOR.block_on(async move {
         ep.ep
             .write()
             .await
@@ -872,13 +872,6 @@ pub fn endpoint_close(ep: repr_c::Box<Endpoint>) -> EndpointResult {
             .close()
             .await
     });
-    match res {
-        Ok(()) => EndpointResult::Ok,
-        Err(err) => {
-            dbg!(err);
-            EndpointResult::CloseError
-        }
-    }
 }
 
 /// Get the the node dialing information of this iroh endpoint.
