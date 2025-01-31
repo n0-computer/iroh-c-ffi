@@ -102,6 +102,10 @@ enum EndpointResult {
      *  It is common to simply log this error and move on.
      */
     ENDPOINT_RESULT_INCOMING_ERROR,
+    /** \brief
+     *  Unable to find connection for the given `NodeId`
+     */
+    ENDPOINT_RESULT_CONNECTION_TYPE_ERROR,
 }
 #ifndef DOXYGEN
 ; typedef uint8_t
@@ -512,6 +516,55 @@ typedef struct PublicKey {
     /** <No documentation available> */
     uint8_32_array_t key;
 } PublicKey_t;
+
+/** <No documentation available> */
+/** \remark Has the same ABI as `uint8_t` **/
+#ifdef DOXYGEN
+typedef
+#endif
+enum ConnectionType {
+    /** \brief
+     *  Direct UDP connection
+     */
+    CONNECTION_TYPE_DIRECT = 0,
+    /** \brief
+     *  Relay connection over relay
+     */
+    CONNECTION_TYPE_RELAY,
+    /** \brief
+     *  Both a UDP and a relay connection are used.
+     *
+     *  This is the case if we do have a UDP address, but are missing a recent confirmation that
+     *  the address works.
+     */
+    CONNECTION_TYPE_MIXED,
+    /** \brief
+     *  We have no verified connection to this PublicKey
+     */
+    CONNECTION_TYPE_NONE,
+}
+#ifndef DOXYGEN
+; typedef uint8_t
+#endif
+ConnectionType_t;
+
+/** \brief
+ *  Run a callback once you have a direct connection to a peer
+ *
+ *  Does not block. The provided callback will be called when we have a direct
+ *  connection to the peer associated with the `node_id`, or the timeout has occurred.
+ *
+ *  To wait indefinitely, provide -1 for the timeout parameter.
+ *
+ *  `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
+ *  called from another thread.
+ */
+void
+endpoint_conn_type_cb (
+    Endpoint_t * ep,
+    void const * ctx,
+    PublicKey_t const * node_id,
+    void (*cb)(void const *, EndpointResult_t, ConnectionType_t));
 
 /** \brief
  *  Represents a valid URL.
