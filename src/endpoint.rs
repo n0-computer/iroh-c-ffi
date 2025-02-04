@@ -8,9 +8,11 @@ use iroh::discovery::{
     dns::DnsDiscovery, local_swarm_discovery::LocalSwarmDiscovery, pkarr::PkarrPublisher,
     ConcurrentDiscovery,
 };
-use iroh::NodeId;
+use iroh::{
+    endpoint::{ConnectionError, VarInt},
+    NodeId,
+};
 use n0_future::StreamExt;
-use quinn::{ConnectionError, VarInt};
 use safer_ffi::{prelude::*, slice, vec};
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
