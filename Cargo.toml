@@ -19,10 +19,9 @@ required-features = ["headers"]  # Do not build unless generating headers.
 [dependencies]
 anyhow = "1.0.79"
 bytes = "1.5.0"
-iroh = { version = "0.31", features = ["discovery-local-network"] }
-iroh-base = { version = "0.31", features = ["ticket"] }
+iroh = { version = "0.32", features = ["discovery-local-network"] }
+iroh-base = { version = "0.32", features = ["ticket"] }
 once_cell = "1.19.0"
-quinn = { version = "0.12", package = "iroh-quinn" }
 rand = "0.8.5"
 safer-ffi = { version = "0.1.5" }
 socket2 = "0.5.7"
@@ -30,7 +29,7 @@ tokio = { version = "1.36.0", features = ["rt-multi-thread"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 url = "2.5.0"
-futures-lite = "2.3.0"
+n0-future = "0.1.2"
 
 [features]
 # generate headers

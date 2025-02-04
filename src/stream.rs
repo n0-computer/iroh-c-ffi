@@ -10,7 +10,7 @@ use crate::util::TOKIO_EXECUTOR;
 #[repr(opaque)]
 #[derive(Debug, Default)]
 pub struct RecvStream {
-    pub(crate) stream: Option<quinn::RecvStream>,
+    pub(crate) stream: Option<iroh::endpoint::RecvStream>,
 }
 
 /// Must be freed using `recv_stream_free`.
@@ -35,7 +35,7 @@ pub fn recv_stream_id(stream: &repr_c::Box<RecvStream>) -> u64 {
         .as_ref()
         .expect("recvstream not initialized")
         .id()
-        .0
+        .index()
 }
 
 /// Receive data on this stream.
@@ -151,7 +151,7 @@ pub fn recv_stream_read_to_end_timeout(
 #[repr(opaque)]
 #[derive(Debug, Default)]
 pub struct SendStream {
-    pub(crate) stream: Option<quinn::SendStream>,
+    pub(crate) stream: Option<iroh::endpoint::SendStream>,
 }
 
 /// Must be freed using `send_stream_free`.
@@ -174,7 +174,7 @@ pub fn send_stream_id(stream: &repr_c::Box<SendStream>) -> u64 {
         .as_ref()
         .expect("sendstream not initialized")
         .id()
-        .0
+        .index()
 }
 
 /// Send data on the stream.

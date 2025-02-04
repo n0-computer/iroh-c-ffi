@@ -372,17 +372,14 @@ mod tests {
         node_addr.node_id = public_key_default();
         node_addr_add_relay_url(
             &mut node_addr,
-            Box::new(Url::from("http://test.com".parse::<RelayUrl>().unwrap()))
-                .try_into()
-                .unwrap(),
+            Box::new(Url::from("http://test.com".parse::<RelayUrl>().unwrap())).into(),
         );
         node_addr_add_direct_address(
             &mut node_addr,
             Box::new(SocketAddr::from(
                 "127.0.0.1:1234".parse::<std::net::SocketAddr>().unwrap(),
             ))
-            .try_into()
-            .unwrap(),
+            .into(),
         );
 
         dbg!(&node_addr);
