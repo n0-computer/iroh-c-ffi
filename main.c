@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #include "irohnet.h"
 
@@ -206,7 +207,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
     }
     return -1;
   }
-
+  
   if (json_output) {
      printf("{ \"type\": \"server\", \"status\": \"sent data\"}\n");
   } else {
@@ -446,6 +447,8 @@ run_client (
   printf("closing connection\n");
   connection_close(conn);
   printf("connection closed\n");
+
+  sleep(1);
 
   // gracefully close the endpoint. This will wait until all the connections have closed gracefully, ensure the server receives a `CONNECTION_CLOSE`, so it can also cleanly close.
 

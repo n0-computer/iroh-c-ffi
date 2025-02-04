@@ -3,13 +3,13 @@ use std::ops::Deref;
 use std::time::Duration;
 
 use anyhow::Context;
-use futures_lite::StreamExt;
 use iroh::discovery::Discovery;
 use iroh::discovery::{
     dns::DnsDiscovery, local_swarm_discovery::LocalSwarmDiscovery, pkarr::PkarrPublisher,
     ConcurrentDiscovery,
 };
 use iroh::NodeId;
+use n0_future::StreamExt;
 use quinn::{ConnectionError, VarInt};
 use safer_ffi::{prelude::*, slice, vec};
 use tokio::sync::RwLock;
@@ -398,7 +398,7 @@ pub fn connection_accept_bi(
 #[repr(opaque)]
 #[derive(Debug, Default)]
 pub struct Connection {
-    connection: RwLock<Option<quinn::Connection>>,
+    connection: RwLock<Option<iroh::endpoint::Connection>>,
 }
 
 /// Result must be freed using `connection_free`.
