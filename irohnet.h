@@ -385,14 +385,14 @@ enum DiscoveryConfig {
      */
     DISCOVERY_CONFIG_D_N_S,
     /** \brief
-     *  LocalSwarm Discovery service.
+     *  Mdns Discovery service.
      *
      *  Allows for local node discovery. Discovers other iroh nodes in your local network
      *  If your local network does not have multicast abilities, creating a local swarm discovery service will log an error, but fail silently.
      */
-    DISCOVERY_CONFIG_LOCAL_SWARM,
+    DISCOVERY_CONFIG_MDNS,
     /** \brief
-     *  Use both DNS and LocalSwarm Discovery
+     *  Use both DNS and Mdns Discovery
      *  If your local network does not have multicast abilities, creating a local swarm discovery service will log an error, but fail silently.
      */
     DISCOVERY_CONFIG_ALL,
