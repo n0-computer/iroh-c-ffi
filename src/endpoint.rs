@@ -5,8 +5,7 @@ use std::time::Duration;
 use anyhow::Context;
 use iroh::discovery::Discovery;
 use iroh::discovery::{
-    dns::DnsDiscovery, local_swarm_discovery::LocalSwarmDiscovery, pkarr::PkarrPublisher,
-    ConcurrentDiscovery,
+    dns::DnsDiscovery, mdns::MdnsDiscovery, pkarr::PkarrPublisher, ConcurrentDiscovery,
 };
 use iroh::{
     endpoint::{ConnectionError, VarInt},
@@ -65,12 +64,12 @@ pub enum DiscoveryConfig {
     ///
     /// Allows for global node discovery. Requires access to the internet to work properly.
     DNS,
-    /// LocalSwarm Discovery service.
+    /// Mdns Discovery service.
     ///
     /// Allows for local node discovery. Discovers other iroh nodes in your local network
     /// If your local network does not have multicast abilities, creating a local swarm discovery service will log an error, but fail silently.
-    LocalSwarm,
-    /// Use both DNS and LocalSwarm Discovery
+    Mdns,
+    /// Use both DNS and Mdns Discovery
     /// If your local network does not have multicast abilities, creating a local swarm discovery service will log an error, but fail silently.
     All,
 }
@@ -294,12 +293,10 @@ fn make_discovery_config(
     let services = match discovery_config {
         DiscoveryConfig::None => None,
         DiscoveryConfig::DNS => Some(make_dns_discovery(&secret_key)),
-        DiscoveryConfig::LocalSwarm => {
-            make_local_swarm_discovery(secret_key.public()).map(|s| vec![s])
-        }
+        DiscoveryConfig::Mdns => make_mdns_discovery(secret_key.public()).map(|s| vec![s]),
         DiscoveryConfig::All => {
             let mut services = make_dns_discovery(&secret_key);
-            if let Some(service) = make_local_swarm_discovery(secret_key.public()) {
+            if let Some(service) = make_mdns_discovery(secret_key.public()) {
                 services.push(service);
             }
             Some(services)
@@ -315,10 +312,10 @@ fn make_dns_discovery(secret_key: &iroh::SecretKey) -> Vec<Box<dyn Discovery>> {
     ]
 }
 
-fn make_local_swarm_discovery(node_id: NodeId) -> Option<Box<dyn Discovery>> {
-    match LocalSwarmDiscovery::new(node_id) {
+fn make_mdns_discovery(node_id: NodeId) -> Option<Box<dyn Discovery>> {
+    match MdnsDiscovery::new(node_id) {
         Err(e) => {
-            error!("unable to start LocalSwarmDiscovery service: {e:?}");
+            error!("unable to start MdnsDiscovery service: {e:?}");
             None
         }
         Ok(service) => Some(Box::new(service)),
