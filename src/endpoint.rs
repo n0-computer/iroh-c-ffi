@@ -31,6 +31,7 @@ pub struct EndpointConfig {
     pub discovery_cfg: DiscoveryConfig,
     pub alpn_protocols: vec::Vec<vec::Vec<u8>>,
     pub secret_key: repr_c::Box<SecretKey>,
+    pub tls_x509: bool,
 }
 
 /// The options to configure relay.
@@ -90,6 +91,7 @@ pub fn endpoint_config_default() -> EndpointConfig {
         discovery_cfg: DiscoveryConfig::None,
         alpn_protocols: vec::Vec::EMPTY,
         secret_key: secret_key_generate(),
+        tls_x509: false,
     }
 }
 
@@ -108,6 +110,13 @@ pub fn endpoint_config_add_secret_key(
     secret_key: repr_c::Box<SecretKey>,
 ) {
     config.secret_key = secret_key;
+}
+
+/// Enables X.509 TLS certificates for backwards compatibility with versions of
+/// `iroh` from `0.33.0` and earlier
+#[ffi_export]
+pub fn endpoint_config_enable_tls_x509(config: &mut EndpointConfig) {
+    config.tls_x509 = true;
 }
 
 /// Generate a default endpoint.
@@ -255,6 +264,10 @@ pub fn endpoint_bind(
             .relay_mode(config.relay_mode.into())
             .alpns(alpn_protocols)
             .secret_key(config.secret_key.deref().into());
+
+        if config.tls_x509 {
+            builder = builder.tls_x509();
+        }
 
         let discovery =
             make_discovery_config(config.secret_key.deref().into(), config.discovery_cfg);
