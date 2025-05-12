@@ -384,7 +384,7 @@ jobs:
             components: rustfmt
 
         - name: Install sccache
-          uses: mozilla-actions/sccache-action@v0.0.3
+          uses: mozilla-actions/sccache-action@v0.0.8
 
         - name: fmt
           run: cargo fmt --all -- --check
@@ -402,7 +402,7 @@ jobs:
         - uses: actions/checkout@master
         - uses: dtolnay/rust-toolchain@stable
         - name: Install sccache
-          uses: mozilla-actions/sccache-action@v0.0.3
+          uses: mozilla-actions/sccache-action@v0.0.8
 
         # TODO: We have a bunch of platform-dependent code so should
         #    probably run this job on the full platform matrix
