@@ -9,10 +9,12 @@ use iroh::discovery::{
 };
 use iroh::{
     endpoint::{ConnectionError, VarInt},
-    NodeId,
+    NodeId, Watcher,
 };
 use n0_future::StreamExt;
+use n0_snafu::SpanTrace;
 use safer_ffi::{prelude::*, slice, vec};
+use snafu::GenerateImplicitData;
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
 
@@ -31,7 +33,6 @@ pub struct EndpointConfig {
     pub discovery_cfg: DiscoveryConfig,
     pub alpn_protocols: vec::Vec<vec::Vec<u8>>,
     pub secret_key: repr_c::Box<SecretKey>,
-    pub tls_x509: bool,
 }
 
 /// The options to configure relay.
@@ -91,7 +92,6 @@ pub fn endpoint_config_default() -> EndpointConfig {
         discovery_cfg: DiscoveryConfig::None,
         alpn_protocols: vec::Vec::EMPTY,
         secret_key: secret_key_generate(),
-        tls_x509: false,
     }
 }
 
@@ -110,13 +110,6 @@ pub fn endpoint_config_add_secret_key(
     secret_key: repr_c::Box<SecretKey>,
 ) {
     config.secret_key = secret_key;
-}
-
-/// Enables X.509 TLS certificates for backwards compatibility with versions of
-/// `iroh` from `0.33.0` and earlier
-#[ffi_export]
-pub fn endpoint_config_enable_tls_x509(config: &mut EndpointConfig) {
-    config.tls_x509 = true;
 }
 
 /// Generate a default endpoint.
@@ -163,7 +156,7 @@ pub struct Endpoint {
 enum AcceptError {
     ConnectionClosed(anyhow::Error),
     IncomingError(anyhow::Error),
-    ALPNError(anyhow::Error),
+    ALPNError(iroh::endpoint::AlpnError),
     ConnectionError(anyhow::Error),
 }
 
@@ -183,8 +176,10 @@ impl std::fmt::Display for AcceptError {
         match self {
             AcceptError::ConnectionClosed(err)
             | AcceptError::IncomingError(err)
-            | AcceptError::ALPNError(err)
             | AcceptError::ConnectionError(err) => {
+                write!(f, "{err:?}")
+            }
+            AcceptError::ALPNError(err) => {
                 write!(f, "{err:?}")
             }
         }
@@ -265,14 +260,10 @@ pub fn endpoint_bind(
             .alpns(alpn_protocols)
             .secret_key(config.secret_key.deref().into());
 
-        if config.tls_x509 {
-            builder = builder.tls_x509();
-        }
-
         let discovery =
             make_discovery_config(config.secret_key.deref().into(), config.discovery_cfg);
         if let Some(discovery) = discovery {
-            builder = builder.discovery(Box::new(discovery));
+            builder = builder.discovery(discovery);
         }
         if let Some(ref addr) = ipv4_addr {
             let addr: &SocketAddrV4 = addr;
@@ -320,8 +311,8 @@ fn make_discovery_config(
 
 fn make_dns_discovery(secret_key: &iroh::SecretKey) -> Vec<Box<dyn Discovery>> {
     vec![
-        Box::new(DnsDiscovery::n0_dns()),
-        Box::new(PkarrPublisher::n0_dns(secret_key.clone())),
+        Box::new(DnsDiscovery::n0_dns().build()),
+        Box::new(PkarrPublisher::n0_dns().build(secret_key.clone())),
     ]
 }
 
@@ -598,8 +589,12 @@ pub fn endpoint_accept(
     let res = TOKIO_EXECUTOR.block_on(async move {
         let (alpn, connection) = accept_conn(ep).await?;
         if &alpn != expected_alpn.as_slice() {
-            let err = anyhow::anyhow!("unexpected alpn {:?}", std::str::from_utf8(&alpn));
-            return Err(AcceptError::ALPNError(err));
+            return Err(AcceptError::ALPNError(
+                iroh::endpoint::AlpnError::Unavailable {
+                    backtrace: None,
+                    span_trace: SpanTrace::generate(),
+                },
+            ));
         }
         out.connection.write().await.replace(connection);
         Ok(())
@@ -779,7 +774,7 @@ pub fn endpoint_conn_type_cb(
         // make the compiler happy
         let _ = &ctx_ptr;
 
-        let mut stream = match ep
+        let conn_type = match ep
             .ep
             .read()
             .await
@@ -787,7 +782,7 @@ pub fn endpoint_conn_type_cb(
             .expect("endpoint not initalized")
             .conn_type(node_id)
         {
-            Err(_) => {
+            None => {
                 unsafe {
                     cb(
                         ctx_ptr.0,
@@ -797,9 +792,10 @@ pub fn endpoint_conn_type_cb(
                 }
                 return;
             }
-            Ok(stream) => stream.stream(),
+            Some(conn_type) => conn_type,
         };
 
+        let mut stream = conn_type.stream();
         while let Some(conn_type) = stream.next().await {
             unsafe {
                 cb(ctx_ptr.0, EndpointResult::Ok, conn_type.into());
@@ -989,6 +985,7 @@ pub fn endpoint_node_addr(ep: &repr_c::Box<Endpoint>, out: &mut NodeAddr) -> End
             .as_ref()
             .expect("endpoint not initialized")
             .node_addr()
+            .initialized()
             .await?;
         anyhow::Ok(addr)
     });

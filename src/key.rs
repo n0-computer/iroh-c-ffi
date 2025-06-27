@@ -135,7 +135,10 @@ pub fn secret_key_generate() -> repr_c::Box<SecretKey> {
 /// Result must be freed using `rust_free_string`
 #[ffi_export]
 pub fn secret_key_as_base32(key: &SecretKey) -> char_p::Box {
-    key.key.to_string().try_into().unwrap()
+    data_encoding::HEXLOWER
+        .encode(&key.key.to_bytes())
+        .try_into()
+        .unwrap()
 }
 
 /// The public key for this secret key.
