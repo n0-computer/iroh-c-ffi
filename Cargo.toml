@@ -1,7 +1,7 @@
 [package]
 name = "iroh-c-ffi"
 version = "0.35.0"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 
 [lib]
@@ -17,18 +17,18 @@ name = "generate_headers"
 required-features = ["headers"]  # Do not build unless generating headers.
 
 [dependencies]
-anyhow = "1.0.79"
-bytes = "1.5.0"
+anyhow = "1"
+bytes = "1.10"
 iroh = { version = "0.90", features = ["discovery-local-network"] }
 iroh-base = { version = "0.90", features = ["ticket"] }
-once_cell = "1.19.0"
-rand = "0.8.5"
-safer-ffi = { version = "0.1.5" }
-socket2 = "0.5.7"
-tokio = { version = "1.36.0", features = ["rt-multi-thread"] }
+once_cell = "1.21"
+rand = "0.8"
+safer-ffi = { version = "0.1.13" }
+socket2 = "0.5.10"
+tokio = { version = "1.45.1", features = ["rt-multi-thread"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
-url = "2.5.0"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+url = "2.5"
 n0-future = "0.1.2"
 n0-snafu = "0.2.1"
 snafu = "0.8.6"

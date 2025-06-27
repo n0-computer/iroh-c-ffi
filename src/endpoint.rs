@@ -160,6 +160,7 @@ enum AcceptError {
     ConnectionError(anyhow::Error),
 }
 
+#[allow(clippy::from_over_into)]
 impl Into<EndpointResult> for AcceptError {
     fn into(self) -> EndpointResult {
         match self {
@@ -588,7 +589,7 @@ pub fn endpoint_accept(
 ) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         let (alpn, connection) = accept_conn(ep).await?;
-        if &alpn != expected_alpn.as_slice() {
+        if alpn != expected_alpn.as_slice() {
             return Err(AcceptError::ALPNError(
                 iroh::endpoint::AlpnError::Unavailable {
                     backtrace: None,
@@ -628,7 +629,7 @@ async fn accept_conn(
         )))?
         .accept()
         .map_err(|e| AcceptError::IncomingError(e.into()))?;
-    let alpn = conn.alpn().await.map_err(|e| AcceptError::ALPNError(e))?;
+    let alpn = conn.alpn().await.map_err(AcceptError::ALPNError)?;
     let connection = conn
         .await
         .map_err(|e| AcceptError::ConnectionError(e.into()))?;
