@@ -421,9 +421,6 @@ typedef struct Vec_Vec_uint8 {
  */
 typedef struct SecretKey SecretKey_t;
 
-
-#include <stdbool.h>
-
 /** \brief
  *  Configuration options for the Endpoint.
  */
@@ -439,9 +436,6 @@ typedef struct EndpointConfig {
 
     /** <No documentation available> */
     SecretKey_t * secret_key;
-
-    /** <No documentation available> */
-    bool tls_x509;
 } EndpointConfig_t;
 
 /** \brief
@@ -503,14 +497,6 @@ endpoint_config_add_secret_key (
  */
 EndpointConfig_t
 endpoint_config_default (void);
-
-/** \brief
- *  Enables X.509 TLS certificates for backwards compatibility with versions of
- *  `iroh` from `0.33.0` and earlier
- */
-void
-endpoint_config_enable_tls_x509 (
-    EndpointConfig_t * config);
 
 /** \brief
  *  Frees the iroh endpoint config.
@@ -649,6 +635,14 @@ endpoint_free (
     Endpoint_t * ep);
 
 /** \brief
+ *  Get the home relay of this iroh endpoint.
+ */
+EndpointResult_t
+endpoint_home_relay (
+    Endpoint_t * const * ep,
+    Url_t * out);
+
+/** \brief
  *  Let the endpoint know that the underlying network conditions might have changed.
  *
  *  This really only needs to be called on android,
@@ -659,7 +653,7 @@ endpoint_network_change (
     Endpoint_t * const * ep);
 
 /** \brief
- *  Get the the node dialing information of this iroh endpoint.
+ *  Get the node dialing information of this iroh endpoint.
  */
 EndpointResult_t
 endpoint_node_addr (
