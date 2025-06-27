@@ -635,6 +635,14 @@ endpoint_free (
     Endpoint_t * ep);
 
 /** \brief
+ *  Get the home relay of this iroh endpoint.
+ */
+EndpointResult_t
+endpoint_home_relay (
+    Endpoint_t * const * ep,
+    Url_t * out);
+
+/** \brief
  *  Let the endpoint know that the underlying network conditions might have changed.
  *
  *  This really only needs to be called on android,
@@ -645,7 +653,7 @@ endpoint_network_change (
     Endpoint_t * const * ep);
 
 /** \brief
- *  Get the the node dialing information of this iroh endpoint.
+ *  Get the node dialing information of this iroh endpoint.
  */
 EndpointResult_t
 endpoint_node_addr (

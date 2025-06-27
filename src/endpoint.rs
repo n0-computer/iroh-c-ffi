@@ -18,7 +18,7 @@ use snafu::GenerateImplicitData;
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
 
-use crate::addr::{NodeAddr, SocketAddrV4, SocketAddrV6};
+use crate::addr::{NodeAddr, SocketAddrV4, SocketAddrV6, Url};
 use crate::key::{secret_key_generate, PublicKey, SecretKey};
 use crate::stream::{RecvStream, SendStream};
 use crate::util::TOKIO_EXECUTOR;
@@ -975,7 +975,7 @@ pub fn endpoint_close(ep: repr_c::Box<Endpoint>) {
     });
 }
 
-/// Get the the node dialing information of this iroh endpoint.
+/// Get the node dialing information of this iroh endpoint.
 #[ffi_export]
 pub fn endpoint_node_addr(ep: &repr_c::Box<Endpoint>, out: &mut NodeAddr) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
@@ -998,6 +998,34 @@ pub fn endpoint_node_addr(ep: &repr_c::Box<Endpoint>, out: &mut NodeAddr) -> End
         }
         Err(err) => {
             warn!("failed to retrieve addr: {:?}", err);
+            EndpointResult::AddrError
+        }
+    }
+}
+
+/// Get the home relay of this iroh endpoint.
+#[ffi_export]
+pub fn endpoint_home_relay(ep: &repr_c::Box<Endpoint>, out: &mut Url) -> EndpointResult {
+    let res = TOKIO_EXECUTOR.block_on(async move {
+        let relay_url = ep
+            .ep
+            .read()
+            .await
+            .as_ref()
+            .expect("endpoint not initialized")
+            .home_relay()
+            .initialized()
+            .await?;
+        anyhow::Ok(relay_url)
+    });
+
+    match res {
+        Ok(relay_url) => {
+            *out = relay_url.into();
+            EndpointResult::Ok
+        }
+        Err(err) => {
+            warn!("failed to retrieve relay_url: {err:?}");
             EndpointResult::AddrError
         }
     }

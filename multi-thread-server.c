@@ -206,7 +206,14 @@ int main(int argc, char const *const argv[])
         return -1;
     }
     char *node_id_str = public_key_as_base32(&node_addr.node_id);
-    char *relay_url_str = url_as_str(node_addr.relay_url);
+    
+    Url_t * relay_url = url_default();
+    int relay_url_res = endpoint_home_relay(&ep, relay_url);
+    if (relay_url_res != 0) {
+        fprintf(stderr, "failed to get my home relay");
+        return -1;
+    }
+    char * relay_url_str = url_as_str(relay_url);
 
     printf("Listening on:\nNode Id: %s\nRelay: %s\nAddrs:\n", node_id_str, relay_url_str);
 
