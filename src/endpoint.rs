@@ -1051,11 +1051,11 @@ mod tests {
         let alpn0: vec::Vec<u8> = b"/hello/world/1234".to_vec().into();
         let alpn1: vec::Vec<u8> = b"/ha/coo/12".to_vec().into();
 
-        endpoint_config_add_alpn(&mut config, alpn0.as_ref().into());
+        endpoint_config_add_alpn(&mut config, alpn0.as_ref());
         assert_eq!(config.alpn_protocols[0].as_ref(), alpn0.as_ref());
         assert_eq!(config.alpn_protocols[0].as_ref().len(), 17);
 
-        endpoint_config_add_alpn(&mut config, alpn1.as_ref().into());
+        endpoint_config_add_alpn(&mut config, alpn1.as_ref());
         assert_eq!(config.alpn_protocols[1].as_ref(), alpn1.as_ref());
         assert_eq!(config.alpn_protocols[1].as_ref().len(), 10);
     }
@@ -1065,10 +1065,10 @@ mod tests {
         let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
         // create config
         let mut config_server = endpoint_config_default();
-        endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
+        endpoint_config_add_alpn(&mut config_server, alpn.as_ref());
 
         let mut config_client = endpoint_config_default();
-        endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
+        endpoint_config_add_alpn(&mut config_client, alpn.as_ref());
 
         let (s, r) = std::sync::mpsc::channel();
 
@@ -1076,8 +1076,8 @@ mod tests {
         let alpn_s = alpn.clone();
         let server_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
-            let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_server, None, None, &mut ep);
+            let ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_server, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
@@ -1088,8 +1088,8 @@ mod tests {
 
             // accept connection
             println!("[s] endpoint accept");
-            let mut conn = connection_default();
-            let accept_res = endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            let conn = connection_default();
+            let accept_res = endpoint_accept(&ep, alpn_s.as_ref(), &conn);
             assert_eq!(accept_res, EndpointResult::Ok);
 
             println!("[s] connection accept uni");
@@ -1114,8 +1114,8 @@ mod tests {
         // setup client
         let client_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
-            let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_client, None, None, &mut ep);
+            let ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_client, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
@@ -1123,8 +1123,8 @@ mod tests {
 
             println!("[c] dialing");
             // connect to server
-            let mut conn = connection_default();
-            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+            let conn = connection_default();
+            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &conn);
             assert_eq!(connect_res, EndpointResult::Ok);
 
             println!("[c] connection open uni");
@@ -1152,10 +1152,10 @@ mod tests {
         let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
         // create config
         let mut config_server = endpoint_config_default();
-        endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
+        endpoint_config_add_alpn(&mut config_server, alpn.as_ref());
 
         let mut config_client = endpoint_config_default();
-        endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
+        endpoint_config_add_alpn(&mut config_client, alpn.as_ref());
 
         let (s, r) = std::sync::mpsc::channel();
 
@@ -1163,8 +1163,8 @@ mod tests {
         let alpn_s = alpn.clone();
         let server_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
-            let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_server, None, None, &mut ep);
+            let ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_server, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
@@ -1175,8 +1175,8 @@ mod tests {
 
             // accept connection
             println!("[s] accepting conn");
-            let mut conn = connection_default();
-            let accept_res = endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            let conn = connection_default();
+            let accept_res = endpoint_accept(&ep, alpn_s.as_ref(), &conn);
             println!("[s] accept_res: {accept_res:?}");
             assert_eq!(accept_res, EndpointResult::Ok);
 
@@ -1199,8 +1199,8 @@ mod tests {
         // setup client
         let client_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
-            let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_client, None, None, &mut ep);
+            let ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_client, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
@@ -1208,8 +1208,8 @@ mod tests {
 
             println!("[c] dialing");
             // connect to server
-            let mut conn = connection_default();
-            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+            let conn = connection_default();
+            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &conn);
             assert_eq!(connect_res, EndpointResult::Ok);
 
             println!("[c] accepting uni");
@@ -1238,10 +1238,10 @@ mod tests {
         let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
         // create config
         let mut config_server = endpoint_config_default();
-        endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
+        endpoint_config_add_alpn(&mut config_server, alpn.as_ref());
 
         let mut config_client = endpoint_config_default();
-        endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
+        endpoint_config_add_alpn(&mut config_client, alpn.as_ref());
 
         let (s, r) = std::sync::mpsc::channel();
         let (server_s, server_r) = std::sync::mpsc::channel();
@@ -1250,8 +1250,8 @@ mod tests {
         let alpn_s = alpn.clone();
         let server_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
-            let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_server, None, None, &mut ep);
+            let ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_server, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
@@ -1262,8 +1262,8 @@ mod tests {
 
             // accept connection
             println!("[s] accepting conn");
-            let mut conn = connection_default();
-            let accept_res = endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            let conn = connection_default();
+            let accept_res = endpoint_accept(&ep, alpn_s.as_ref(), &conn);
             assert_eq!(accept_res, EndpointResult::Ok);
 
             println!("[s] reading");
@@ -1278,8 +1278,8 @@ mod tests {
         // setup client
         let client_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
-            let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_client, None, None, &mut ep);
+            let ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_client, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
@@ -1287,15 +1287,15 @@ mod tests {
 
             println!("[c] dialing");
             // connect to server
-            let mut conn = connection_default();
-            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+            let conn = connection_default();
+            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &conn);
             assert_eq!(connect_res, EndpointResult::Ok);
 
             println!("[c] sending");
             let max_datagram = connection_max_datagram_size(&conn);
             assert!(max_datagram > 0);
             dbg!(max_datagram);
-            let send_res = connection_write_datagram(&mut conn, b"hello world"[..].into());
+            let send_res = connection_write_datagram(&conn, b"hello world"[..].into());
             assert_eq!(send_res, EndpointResult::Ok);
 
             // wait for the server to have received
@@ -1311,10 +1311,10 @@ mod tests {
         let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
         // create config
         let mut config_server = endpoint_config_default();
-        endpoint_config_add_alpn(&mut config_server, alpn.as_ref().into());
+        endpoint_config_add_alpn(&mut config_server, alpn.as_ref());
 
         let mut config_client = endpoint_config_default();
-        endpoint_config_add_alpn(&mut config_client, alpn.as_ref().into());
+        endpoint_config_add_alpn(&mut config_client, alpn.as_ref());
 
         let (s, r) = std::sync::mpsc::channel();
         let (client_s, client_r) = std::sync::mpsc::channel();
@@ -1323,8 +1323,8 @@ mod tests {
         let alpn_s = alpn.clone();
         let server_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
-            let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_server, None, None, &mut ep);
+            let ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_server, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             let mut node_addr = node_addr_default();
@@ -1335,8 +1335,8 @@ mod tests {
 
             // accept connection
             println!("[s] accepting conn");
-            let mut conn = connection_default();
-            let res = endpoint_accept(&ep, alpn_s.as_ref(), &mut conn);
+            let conn = connection_default();
+            let res = endpoint_accept(&ep, alpn_s.as_ref(), &conn);
             assert_eq!(res, EndpointResult::Ok);
 
             let mut send_stream = send_stream_default();
@@ -1366,8 +1366,8 @@ mod tests {
         // setup client
         let client_thread = std::thread::spawn(move || {
             // create iroh endpoint and bind
-            let mut ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_client, None, None, &mut ep);
+            let ep = endpoint_default();
+            let bind_res = endpoint_bind(&config_client, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
@@ -1375,8 +1375,8 @@ mod tests {
 
             println!("[c] dialing");
             // connect to server
-            let mut conn = connection_default();
-            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+            let conn = connection_default();
+            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &conn);
             assert_eq!(connect_res, EndpointResult::Ok);
 
             let mut send_stream = send_stream_default();
@@ -1414,12 +1414,12 @@ mod tests {
 
         // create config
         let mut config_server = endpoint_config_default();
-        endpoint_config_add_alpn(&mut config_server, alpn1.as_ref().into());
-        endpoint_config_add_alpn(&mut config_server, alpn2.as_ref().into());
+        endpoint_config_add_alpn(&mut config_server, alpn1.as_ref());
+        endpoint_config_add_alpn(&mut config_server, alpn2.as_ref());
 
         let mut config_client = endpoint_config_default();
-        endpoint_config_add_alpn(&mut config_client, alpn1.as_ref().into());
-        endpoint_config_add_alpn(&mut config_client, alpn2.as_ref().into());
+        endpoint_config_add_alpn(&mut config_client, alpn1.as_ref());
+        endpoint_config_add_alpn(&mut config_client, alpn2.as_ref());
 
         let (s, r) = std::sync::mpsc::channel();
         let (client1_s, client1_r) = std::sync::mpsc::channel();
@@ -1452,9 +1452,9 @@ mod tests {
                 handles.push(std::thread::spawn(move || {
                     // accept connection
                     println!("[s][{i}] accepting conn");
-                    let mut conn = connection_default();
+                    let conn = connection_default();
                     let mut alpn = vec::Vec::EMPTY;
-                    let res = endpoint_accept_any(&ep, &mut alpn, &mut conn);
+                    let res = endpoint_accept_any(&ep, &mut alpn, &conn);
                     assert_eq!(res, EndpointResult::Ok);
 
                     let (j, client_r) = if alpn.as_ref() == alpn1_s.as_ref() {
@@ -1462,7 +1462,7 @@ mod tests {
                     } else if alpn.as_ref() == alpn2_s.as_ref() {
                         (1, clients.lock().unwrap().pop().unwrap())
                     } else {
-                        panic!("unexpectd alpn: {:?}", alpn);
+                        panic!("unexpectd alpn: {alpn:?}");
                     };
 
                     let mut send_stream = send_stream_default();
@@ -1526,9 +1526,9 @@ mod tests {
 
                     println!("[c][{i}] dialing");
                     // connect to server
-                    let mut conn = connection_default();
+                    let conn = connection_default();
                     let alpn = if i == 0 { alpn1 } else { alpn2 };
-                    let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &mut conn);
+                    let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &conn);
                     assert_eq!(connect_res, EndpointResult::Ok);
 
                     let mut send_stream = send_stream_default();
@@ -1623,7 +1623,7 @@ mod tests {
             assert_eq!(res, EndpointResult::Ok);
 
             if alpn.as_ref() != alpn_s.as_ref() {
-                panic!("unexpectd alpn: {:?}", alpn);
+                panic!("unexpectd alpn: {alpn:?}");
             };
 
             let mut send_stream = send_stream_default();
