@@ -463,14 +463,14 @@ run_client (
 
   printf("closing endpoint\n");
   endpoint_close(ep);
-  printf("~endpoint closed\n");
+  printf("endpoint closed\n");
 
   printf("fflush to stdout\n");
   fflush(stdout);
 
   // cleanup
-  printf("free recv_str\n");
-  free(recv_str);
+  // printf("free recv_str\n");
+  // free(recv_str);
   printf("free recv_buffer\n");
   free(recv_buffer);
   printf("free conn_status\n");
