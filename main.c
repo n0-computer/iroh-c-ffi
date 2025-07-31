@@ -465,12 +465,17 @@ run_client (
   endpoint_close(ep);
   printf("endpoint closed\n");
 
+  printf("fflush to stdout\n");
   fflush(stdout);
 
   // cleanup
+  printf("free recv_str\n");
   free(recv_str);
+  printf("free recv_buffer\n");
   free(recv_buffer);
+  printf("free conn_status\n");
   free(conn_status);
+  printf("free recv_stream\n");
   recv_stream_free(recv_stream);
   return 0;
 }
@@ -523,6 +528,7 @@ main (int argc, char const * const argv[])
       return ret;
     }
 
+    printf("free addrs\n");
     // cleanup
     free(addrs);
 
@@ -541,7 +547,9 @@ main (int argc, char const * const argv[])
   }
 
   // cleanup
+  printf("free config\n");
   endpoint_config_free(config);
 
+  printf("exit\n");
   return EXIT_SUCCESS;
 }

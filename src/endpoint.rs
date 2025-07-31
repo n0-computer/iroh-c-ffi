@@ -987,7 +987,7 @@ pub fn endpoint_node_addr(ep: &repr_c::Box<Endpoint>, out: &mut NodeAddr) -> End
             .expect("endpoint not initialized")
             .node_addr()
             .initialized()
-            .await?;
+            .await;
         anyhow::Ok(addr)
     });
 
@@ -1015,7 +1015,7 @@ pub fn endpoint_home_relay(ep: &repr_c::Box<Endpoint>, out: &mut Url) -> Endpoin
             .expect("endpoint not initialized")
             .home_relay()
             .initialized()
-            .await?;
+            .await;
         anyhow::Ok(relay_url)
     });
 
