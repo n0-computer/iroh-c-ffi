@@ -87,7 +87,6 @@ jobs:
                 node_id=$(echo $json_output | jq -r '.node_id')
                 relay=$(echo $json_output | jq -r '.relay')
                 addrs=$(echo $json_output | jq -r '.addrs[]')
-                echo "./main client $node_id $relay ${addrs[@]}"
                 ./main client $node_id $relay ${addrs[@]}
                 sleep 10
 
