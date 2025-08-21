@@ -276,10 +276,15 @@ callback(
   ConnectionType_t conn_type
 )
 {
+  printf("Callback 0\n");
   ConnectionStatus *cs;
+  printf("Callback 1\n");
   cs = (ConnectionStatus *)ctx;
+  printf("Callback 2\n");
   cs->res = res;
+  printf("Callback 3\n");
   cs->conn_type = conn_type;
+  printf("Callback done\n");
 }
 
 int
@@ -461,17 +466,23 @@ run_client (
 
   // gracefully close the endpoint. This will wait until all the connections have closed gracefully, ensure the server receives a `CONNECTION_CLOSE`, so it can also cleanly close.
 
+  printf("free recv_stream\n");
+  recv_stream_free(recv_stream);
+
   printf("closing endpoint\n");
   endpoint_close(ep);
   printf("endpoint closed\n");
 
+  printf("fflush to stdout\n");
   fflush(stdout);
 
   // cleanup
+  printf("free recv_str\n");
   free(recv_str);
+  printf("free recv_buffer\n");
   free(recv_buffer);
+  printf("free conn_status\n");
   free(conn_status);
-  recv_stream_free(recv_stream);
   return 0;
 }
 
@@ -523,6 +534,7 @@ main (int argc, char const * const argv[])
       return ret;
     }
 
+    printf("free addrs\n");
     // cleanup
     free(addrs);
 
@@ -541,7 +553,9 @@ main (int argc, char const * const argv[])
   }
 
   // cleanup
+  printf("free config\n");
   endpoint_config_free(config);
 
+  printf("exit\n");
   return EXIT_SUCCESS;
 }

@@ -838,6 +838,8 @@ recv_stream_default (void);
  *  Free the recv stream.
  *
  *  Implicitly calls `stop(0)` on the connection.
+ *
+ *  Must be called before `endpoint_free`
  */
 void
 recv_stream_free (
@@ -1016,6 +1018,8 @@ send_stream_finish (
 
 /** \brief
  *  Frees the send stream.
+ *
+ *  Must be called before `endpoint_free`
  */
 void
 send_stream_free (

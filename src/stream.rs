@@ -22,6 +22,8 @@ pub fn recv_stream_default() -> repr_c::Box<RecvStream> {
 /// Free the recv stream.
 ///
 /// Implicitly calls `stop(0)` on the connection.
+///
+/// Must be called before `endpoint_free`
 #[ffi_export]
 pub fn recv_stream_free(stream: repr_c::Box<RecvStream>) {
     drop(stream);
@@ -161,6 +163,8 @@ pub fn send_stream_default() -> repr_c::Box<SendStream> {
 }
 
 /// Frees the send stream.
+///
+/// Must be called before `endpoint_free`
 #[ffi_export]
 pub fn send_stream_free(stream: repr_c::Box<SendStream>) {
     drop(stream);
