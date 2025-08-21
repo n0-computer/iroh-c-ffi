@@ -457,9 +457,6 @@ run_client (
     return -1;
   }
 
-  printf("free recv_stream\n");
-  recv_stream_free(recv_stream);
-
   // indicate to the server that you want to close the connection
   printf("closing connection\n");
   connection_close(conn);
@@ -468,6 +465,9 @@ run_client (
   sleep(1);
 
   // gracefully close the endpoint. This will wait until all the connections have closed gracefully, ensure the server receives a `CONNECTION_CLOSE`, so it can also cleanly close.
+
+  printf("free recv_stream\n");
+  recv_stream_free(recv_stream);
 
   printf("closing endpoint\n");
   endpoint_close(ep);
