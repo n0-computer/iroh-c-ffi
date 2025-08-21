@@ -457,6 +457,9 @@ run_client (
     return -1;
   }
 
+  printf("free recv_stream\n");
+  recv_stream_free(recv_stream);
+
   // indicate to the server that you want to close the connection
   printf("closing connection\n");
   connection_close(conn);
@@ -480,8 +483,6 @@ run_client (
   free(recv_buffer);
   printf("free conn_status\n");
   free(conn_status);
-  printf("free recv_stream\n");
-  // recv_stream_free(recv_stream);
   return 0;
 }
 
