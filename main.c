@@ -276,10 +276,15 @@ callback(
   ConnectionType_t conn_type
 )
 {
+  printf("Callback 0\n");
   ConnectionStatus *cs;
+  printf("Callback 1\n");
   cs = (ConnectionStatus *)ctx;
+  printf("Callback 2\n");
   cs->res = res;
+  printf("Callback 3\n");
   cs->conn_type = conn_type;
+  printf("Callback done\n");
 }
 
 int
