@@ -803,13 +803,13 @@ pub fn endpoint_conn_type_cb(
             }
         }
 
-        unsafe {
-            cb(
-                ctx_ptr.0,
-                EndpointResult::ConnectError,
-                ConnectionType::None,
-            );
-        }
+        // unsafe {
+        //     cb(
+        //         ctx_ptr.0,
+        //         EndpointResult::ConnectError,
+        //         ConnectionType::None,
+        //     );
+        // }
     });
 }
 

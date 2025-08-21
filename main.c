@@ -481,7 +481,7 @@ run_client (
   printf("free conn_status\n");
   free(conn_status);
   printf("free recv_stream\n");
-  recv_stream_free(recv_stream);
+  // recv_stream_free(recv_stream);
   return 0;
 }
 
