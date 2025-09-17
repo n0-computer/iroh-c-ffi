@@ -298,10 +298,10 @@ fn make_discovery_config(
     let services = match discovery_config {
         DiscoveryConfig::None => None,
         DiscoveryConfig::DNS => Some(make_dns_discovery(&secret_key)),
-        DiscoveryConfig::Mdns => make_mdns_discovery(secret_key.public()).map(|s| vec![s]),
+        DiscoveryConfig::Mdns => make_mdns_discovery(secret_key.public(), true).map(|s| vec![s]),
         DiscoveryConfig::All => {
             let mut services = make_dns_discovery(&secret_key);
-            if let Some(service) = make_mdns_discovery(secret_key.public()) {
+            if let Some(service) = make_mdns_discovery(secret_key.public(), true) {
                 services.push(service);
             }
             Some(services)
@@ -317,8 +317,8 @@ fn make_dns_discovery(secret_key: &iroh::SecretKey) -> Vec<Box<dyn Discovery>> {
     ]
 }
 
-fn make_mdns_discovery(node_id: NodeId) -> Option<Box<dyn Discovery>> {
-    match MdnsDiscovery::new(node_id) {
+fn make_mdns_discovery(node_id: NodeId, advertise: bool) -> Option<Box<dyn Discovery>> {
+    match MdnsDiscovery::new(node_id, advertise) {
         Err(e) => {
             error!("unable to start MdnsDiscovery service: {e:?}");
             None
