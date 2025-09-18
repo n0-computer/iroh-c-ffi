@@ -19,25 +19,21 @@ required-features = ["headers"]  # Do not build unless generating headers.
 [dependencies]
 anyhow = "1"
 bytes = "1.10"
-iroh = { version = "0.91", features = ["discovery-local-network"] }
-iroh-base = { version = "0.91", features = ["ticket"] }
+iroh = { version = "0.92", features = ["discovery-local-network"] }
+iroh-base = { version = "0.92", features = ["ticket"] }
 once_cell = "1.21"
 rand = "0.8"
 safer-ffi = { version = "0.1.13" }
 socket2 = "0.5.10"
 tokio = { version = "1.45.1", features = ["rt-multi-thread"] }
 tracing = "0.1"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 url = "2.5"
 n0-future = "0.1.2"
-n0-snafu = "0.2.1"
+n0-snafu = "0.2.2"
 snafu = "0.8.6"
 data-encoding = "2.9.0"
 
 [features]
 # generate headers
 headers = ["safer-ffi/headers"]
-
-[patch.crates-io]
-iroh = { git = "https://github.com/n0-computer/iroh", branch = "main" }
-iroh-base = { git = "https://github.com/n0-computer/iroh", branch = "main" }
