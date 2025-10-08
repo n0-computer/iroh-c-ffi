@@ -18,7 +18,7 @@ use snafu::GenerateImplicitData;
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
 
-use crate::addr::{NodeAddr, SocketAddrV4, SocketAddrV6, Url};
+use crate::addr::{NodeAddr, SocketAddrV4, SocketAddrV6};
 use crate::key::{secret_key_generate, PublicKey, SecretKey};
 use crate::stream::{RecvStream, SendStream};
 use crate::util::TOKIO_EXECUTOR;
@@ -318,7 +318,7 @@ fn make_dns_discovery(secret_key: &iroh::SecretKey) -> Vec<Box<dyn Discovery>> {
 }
 
 fn make_mdns_discovery(node_id: NodeId, advertise: bool) -> Option<Box<dyn Discovery>> {
-    match MdnsDiscovery::new(node_id, advertise) {
+    match MdnsDiscovery::builder().advertise(advertise).build(node_id) {
         Err(e) => {
             error!("unable to start MdnsDiscovery service: {e:?}");
             None
@@ -985,9 +985,7 @@ pub fn endpoint_node_addr(ep: &repr_c::Box<Endpoint>, out: &mut NodeAddr) -> End
             .await
             .as_ref()
             .expect("endpoint not initialized")
-            .node_addr()
-            .initialized()
-            .await;
+            .node_addr();
         anyhow::Ok(addr)
     });
 
@@ -1003,30 +1001,32 @@ pub fn endpoint_node_addr(ep: &repr_c::Box<Endpoint>, out: &mut NodeAddr) -> End
     }
 }
 
-/// Get the home relay of this iroh endpoint.
+/// Returns once the endpoint is online.
+///
+/// We are considered online if we have a home relay and at least one
+/// direct address.
+///
+/// Will block at most `timeout` milliseconds.
 #[ffi_export]
-pub fn endpoint_home_relay(ep: &repr_c::Box<Endpoint>, out: &mut Url) -> EndpointResult {
+pub fn endpoint_online(ep: &repr_c::Box<Endpoint>, timeout_ms: u64) -> EndpointResult {
+    let timeout = Duration::from_millis(timeout_ms);
     let res = TOKIO_EXECUTOR.block_on(async move {
-        let relay_url = ep
-            .ep
-            .read()
-            .await
-            .as_ref()
-            .expect("endpoint not initialized")
-            .home_relay()
-            .initialized()
-            .await;
-        anyhow::Ok(relay_url)
+        tokio::time::timeout(timeout, async move {
+            ep.ep
+                .read()
+                .await
+                .as_ref()
+                .expect("endpoint not initialized")
+                .online()
+                .await;
+        })
+        .await
     });
-
     match res {
-        Ok(relay_url) => {
-            *out = relay_url.into();
-            EndpointResult::Ok
-        }
-        Err(err) => {
-            warn!("failed to retrieve relay_url: {err:?}");
-            EndpointResult::AddrError
+        Ok(()) => EndpointResult::Ok,
+        Err(_err) => {
+            warn!("online failed timeout");
+            EndpointResult::Timeout
         }
     }
 }

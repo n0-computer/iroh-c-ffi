@@ -635,14 +635,6 @@ endpoint_free (
     Endpoint_t * ep);
 
 /** \brief
- *  Get the home relay of this iroh endpoint.
- */
-EndpointResult_t
-endpoint_home_relay (
-    Endpoint_t * const * ep,
-    Url_t * out);
-
-/** \brief
  *  Let the endpoint know that the underlying network conditions might have changed.
  *
  *  This really only needs to be called on android,
@@ -659,6 +651,19 @@ EndpointResult_t
 endpoint_node_addr (
     Endpoint_t * const * ep,
     NodeAddr_t * out);
+
+/** \brief
+ *  Returns once the endpoint is online.
+ *
+ *  We are considered online if we have a home relay and at least one
+ *  direct address.
+ *
+ *  Will block at most `timeout` milliseconds.
+ */
+EndpointResult_t
+endpoint_online (
+    Endpoint_t * const * ep,
+    uint64_t timeout_ms);
 
 /** \brief
  *  Enables tracing for iroh.

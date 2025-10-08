@@ -25,6 +25,13 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
     return -1;
   }
 
+  // Ensure we are online, waiting 5 seconds max
+  int timeout_res = endpoint_online(&ep, 5000);
+  if (timeout_res != 0) {
+    fprintf(stderr, "failed to get a home relay\n");
+    return -1;
+  }
+
   // Print details
   NodeAddr_t node_addr = node_addr_default();
   int addr_res = endpoint_node_addr(&ep, &node_addr);
@@ -35,11 +42,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   char * node_id_str = public_key_as_base32(&node_addr.node_id);
 
   Url_t * relay_url = url_default();
-  int relay_url_res = endpoint_home_relay(&ep, relay_url);
-  if (relay_url_res != 0) {
-    fprintf(stderr, "failed to get my home relay");
-    return -1;
-  }
+  relay_url = node_addr.relay_url;
 
   char * relay_url_str = url_as_str(relay_url);
 
