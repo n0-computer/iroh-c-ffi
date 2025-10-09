@@ -97,7 +97,7 @@ pub fn secret_key_free(key: repr_c::Box<SecretKey>) {
 #[ffi_export]
 pub fn secret_key_default() -> repr_c::Box<SecretKey> {
     Box::new(SecretKey {
-        key: iroh::SecretKey::generate(rand::rngs::OsRng),
+        key: iroh::SecretKey::generate(&mut rand::rng()),
     })
     .into()
 }
@@ -125,7 +125,7 @@ pub fn secret_key_from_base32(
 #[ffi_export]
 pub fn secret_key_generate() -> repr_c::Box<SecretKey> {
     Box::new(SecretKey {
-        key: iroh::SecretKey::generate(rand::rngs::OsRng),
+        key: iroh::SecretKey::generate(&mut rand::rng()),
     })
     .into()
 }
