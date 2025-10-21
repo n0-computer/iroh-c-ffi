@@ -123,7 +123,7 @@ pub fn endpoint_addr_add_relay_url(addr: &mut EndpointAddr, relay_url: repr_c::B
 
 /// Add the given direct addresses to the peer's addr info.
 #[ffi_export]
-pub fn endpoint_addr_add_ip_address(
+pub fn endpoint_addr_add_ip_addrs(
     endpoint_addr: &mut EndpointAddr,
     address: repr_c::Box<SocketAddr>,
 ) {
@@ -134,7 +134,7 @@ pub fn endpoint_addr_add_ip_address(
 
 /// Get the nth direct addresses of this peer.
 #[ffi_export]
-pub fn endpoint_addr_ip_addresses_nth(addr: &EndpointAddr, i: usize) -> Option<&SocketAddr> {
+pub fn endpoint_addr_ip_addrs_nth(addr: &EndpointAddr, i: usize) -> Option<&SocketAddr> {
     addr.ip_addrs.get(i).map(|addr| &**addr)
 }
 
@@ -382,7 +382,7 @@ mod tests {
             &mut endpoint_addr,
             Box::new(Url::from("http://test.com".parse::<RelayUrl>().unwrap())).into(),
         );
-        endpoint_addr_add_ip_address(
+        endpoint_addr_add_ip_addrs(
             &mut endpoint_addr,
             Box::new(SocketAddr::from(
                 "127.0.0.1:1234".parse::<std::net::SocketAddr>().unwrap(),

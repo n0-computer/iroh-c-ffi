@@ -426,7 +426,7 @@ endpoint_addr (
  *  Add the given direct addresses to the peer's addr info.
  */
 void
-endpoint_addr_add_ip_address (
+endpoint_addr_add_ip_addrs (
     EndpointAddr_t * endpoint_addr,
     SocketAddr_t * address);
 
@@ -502,7 +502,7 @@ endpoint_addr_from_string (
  *  Get the nth direct addresses of this peer.
  */
 SocketAddr_t const *
-endpoint_addr_ip_addresses_nth (
+endpoint_addr_ip_addrs_nth (
     EndpointAddr_t const * addr,
     size_t i);
 

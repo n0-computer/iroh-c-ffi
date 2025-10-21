@@ -33,32 +33,33 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   }
 
   // Print details
-  NodeAddr_t node_addr = node_addr_default();
-  int addr_res = endpoint_node_addr(&ep, &node_addr);
+  EndpointAddr_t addr = endpoint_addr_default();
+  int addr_res = endpoint_addr(&ep, &addr);
   if (addr_res != 0) {
     fprintf(stderr, "failed to get my address");
     return -1;
   }
-  char * node_id_str = public_key_as_base32(&node_addr.node_id);
+  char * endpoint_id_str = public_key_as_base32(&addr.id);
 
-  Url_t * relay_url = url_default();
-  relay_url = node_addr.relay_url;
-
-  char * relay_url_str = url_as_str(relay_url);
+  Url_t * const * relay_url = endpoint_addr_relay_urls_nth(&addr, 0);
+  char * relay_url_str;
+  if (relay_url != NULL) {
+    relay_url_str = url_as_str(*relay_url);
+  }
 
   if (json_output) {
-    printf("{ \"type\": \"server\", \"status\": \"listening\", \"node_id\": \"%s\", \"relay\": \"%s\", \"addrs\": [", node_id_str, relay_url_str);
+    printf("{ \"type\": \"server\", \"status\": \"listening\", \"endpoint_id\": \"%s\", \"relay\": \"%s\", \"addrs\": [", endpoint_id_str, relay_url_str);
   } else {
-    printf("Listening on:\nNode Id: %s\nRelay: %s\nAddrs:\n", node_id_str, relay_url_str);
+    printf("Listening on:\nEndpoint Id: %s\nRelay: %s\nAddrs:\n", endpoint_id_str, relay_url_str);
   }
 
   // iterate over the direct addresses
-  for (int i = 0; i < node_addr.direct_addresses.len; i++) {
-    SocketAddr_t const * addr = node_addr_direct_addresses_nth(&node_addr, i);
-    char * socket_str = socket_addr_as_str(addr);
+  for (int i = 0; i < addr.ip_addrs.len; i++) {
+    SocketAddr_t const * socket_addr = endpoint_addr_ip_addrs_nth(&addr, i);
+    char * socket_str = socket_addr_as_str(socket_addr);
     if (json_output) {
       printf("\"%s\"", socket_str);
-      if (i < node_addr.direct_addresses.len - 1) {
+      if (i < addr.ip_addrs.len - 1) {
         printf(", ");
       }
     } else {
@@ -106,7 +107,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
     if (json_output) {
       printf("{ \"type\": \"server\", \"status\": \"received failed\", \"data\": \"%d\" }\n", read);
     } else {
-      fprintf(stderr, "failed to read data"); 
+      fprintf(stderr, "failed to read data");
     }
     return -1;
   }
@@ -177,7 +178,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
         fprintf(stderr, "Endpoint Result Error: %d", bytes_read);
       }
     }
-        
+
     return -1;
   }
 
@@ -219,7 +220,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
     }
     return -1;
   }
-  
+
   if (json_output) {
      printf("{ \"type\": \"server\", \"status\": \"sent data\"}\n");
   } else {
@@ -260,8 +261,8 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   free(recv_buffer);
   recv_stream_free(recv_stream);
   rust_free_string(relay_url_str);
-  rust_free_string(node_id_str);
-  node_addr_free(node_addr);
+  rust_free_string(endpoint_id_str);
+  endpoint_addr_free(addr);
   endpoint_free(ep);
   printf("endpoint freed\n");
   return 0;
@@ -294,7 +295,7 @@ int
 run_client (
   EndpointConfig_t * config,
   slice_ref_uint8_t alpn_slice,
-  char const * node_id_raw,
+  char const * endpoint_id_raw,
   char const * relay_url_raw,
   char const ** addrs_raw,
   int addrs_len
@@ -302,16 +303,16 @@ run_client (
 {
   printf("Starting client...\n");
 
-  // parse node id
-  PublicKey_t node_id = public_key_default();
-  int ret = public_key_from_base32(node_id_raw, &node_id);
+  // parse endpoint id
+  PublicKey_t endpoint_id = public_key_default();
+  int ret = public_key_from_base32(endpoint_id_raw, &endpoint_id);
   if (ret != 0) {
-    fprintf(stderr, "invalid node id");
+    fprintf(stderr, "invalid endpoint id");
     return -1;
   }
 
-  // create node addr
-  NodeAddr_t node_addr = node_addr_new(node_id);
+  // create endpoint addr
+  EndpointAddr_t addr = endpoint_addr_new(endpoint_id);
 
   // parse relay url
   if (relay_url_raw != NULL && strlen(relay_url_raw) > 0) {
@@ -321,18 +322,18 @@ run_client (
       fprintf(stderr, "invalid relay url");
       return -1;
     }
-    node_addr_add_relay_url(&node_addr, relay_url);
+    endpoint_addr_add_relay_url(&addr, relay_url);
   }
 
   // parse direct addrs
   for (int i = 0; i < addrs_len; i++) {
-    SocketAddr_t * addr = socket_addr_default();
-    ret = socket_addr_from_string(addrs_raw[i], &addr);
+    SocketAddr_t * socket_addr = socket_addr_default();
+    ret = socket_addr_from_string(addrs_raw[i], &socket_addr);
     if (ret != 0) {
       fprintf(stderr, "invalid addr");
       return -1;
     }
-    node_addr_add_direct_address(&node_addr, addr);
+    endpoint_addr_add_ip_addrs(&addr, socket_addr);
   }
 
   // setup endpoint
@@ -345,7 +346,7 @@ run_client (
 
   // connect
   Connection_t * conn = connection_default();
-  ret = endpoint_connect(&ep, alpn_slice, node_addr, &conn);
+  ret = endpoint_connect(&ep, alpn_slice, addr, &conn);
   if (ret != 0) {
     fprintf(stderr, "failed to connect to server\n");
     return -1;
@@ -353,7 +354,7 @@ run_client (
 
   ConnectionStatus *conn_status;
   conn_status = malloc(sizeof(ConnectionStatus));
-  endpoint_conn_type_cb(ep, (const void *)conn_status, &node_addr.node_id, callback);
+  endpoint_conn_type_cb(ep, (const void *)conn_status, &addr.id, callback);
 
   SendStream_t * send_stream = send_stream_default();
   ret = connection_open_uni(&conn, &send_stream);
@@ -512,10 +513,10 @@ main (int argc, char const * const argv[])
   // run server or client
   if (strcmp(argv[1], "client") == 0) {
     if (argc < 3) {
-      fprintf(stderr, "client must be supplied <node id> <relay-url> <addr1> .. <addrn>");
+      fprintf(stderr, "client must be supplied <endpoint id> <relay-url> <addr1> .. <addrn>");
       return -1;
     }
-    char const * node_id = argv[2];
+    char const * endpoint_id = argv[2];
     char const * relay_url = NULL;
     char const **addrs = NULL;
     int addrs_len = 0;
@@ -532,7 +533,7 @@ main (int argc, char const * const argv[])
       }
     }
 
-    int ret = run_client(&config, alpn_slice, node_id, relay_url, addrs, addrs_len);
+    int ret = run_client(&config, alpn_slice, endpoint_id, relay_url, addrs, addrs_len);
     if (ret != 0) {
       return ret;
     }
