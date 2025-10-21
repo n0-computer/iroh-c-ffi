@@ -9,7 +9,7 @@ use iroh::discovery::{
 };
 use iroh::{
     endpoint::{ConnectionError, VarInt},
-    NodeId, Watcher,
+    EndpointId, Watcher,
 };
 use n0_future::StreamExt;
 use n0_snafu::SpanTrace;
@@ -18,7 +18,7 @@ use snafu::GenerateImplicitData;
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
 
-use crate::addr::{NodeAddr, SocketAddrV4, SocketAddrV6};
+use crate::addr::{EndpointAddr, SocketAddrV4, SocketAddrV6};
 use crate::key::{secret_key_generate, PublicKey, SecretKey};
 use crate::stream::{RecvStream, SendStream};
 use crate::util::TOKIO_EXECUTOR;
@@ -60,15 +60,15 @@ impl From<RelayMode> for iroh::endpoint::RelayMode {
 #[repr(u8)]
 #[derive(Debug, Copy, Clone)]
 pub enum DiscoveryConfig {
-    /// Use no node discovery mechanism. The default.
+    /// Use no discovery mechanism. The default.
     None,
     /// DNS Discovery service.
     ///
-    /// Allows for global node discovery. Requires access to the internet to work properly.
+    /// Allows for global endpoint discovery. Requires access to the internet to work properly.
     DNS,
     /// Mdns Discovery service.
     ///
-    /// Allows for local node discovery. Discovers other iroh nodes in your local network
+    /// Allows for local endpoint discovery. Discovers other iroh endpoints in your local network
     /// If your local network does not have multicast abilities, creating a local swarm discovery service will log an error, but fail silently.
     Mdns,
     /// Use both DNS and Mdns Discovery
@@ -208,7 +208,7 @@ pub enum EndpointResult {
     ConnectBiError,
     /// Failed to connect.
     ConnectError,
-    /// Unable to retrive node addr.
+    /// Unable to retrive endpoint addr.
     AddrError,
     /// Error while sending data.
     SendError,
@@ -226,7 +226,7 @@ pub enum EndpointResult {
     ///
     /// It is common to simply log this error and move on.
     IncomingError,
-    /// Unable to find connection for the given `NodeId`
+    /// Unable to find connection for the given `EndpointId`
     ConnectionTypeError,
 }
 
@@ -256,7 +256,7 @@ pub fn endpoint_bind(
     );
 
     TOKIO_EXECUTOR.block_on(async move {
-        let mut builder = iroh::endpoint::Builder::default()
+        let mut builder = iroh::endpoint::Endpoint::builder()
             .relay_mode(config.relay_mode.into())
             .alpns(alpn_protocols)
             .secret_key(config.secret_key.deref().into());
@@ -317,8 +317,11 @@ fn make_dns_discovery(secret_key: &iroh::SecretKey) -> Vec<Box<dyn Discovery>> {
     ]
 }
 
-fn make_mdns_discovery(node_id: NodeId, advertise: bool) -> Option<Box<dyn Discovery>> {
-    match MdnsDiscovery::builder().advertise(advertise).build(node_id) {
+fn make_mdns_discovery(endpoint_id: EndpointId, advertise: bool) -> Option<Box<dyn Discovery>> {
+    match MdnsDiscovery::builder()
+        .advertise(advertise)
+        .build(endpoint_id)
+    {
         Err(e) => {
             error!("unable to start MdnsDiscovery service: {e:?}");
             None
@@ -761,7 +764,7 @@ impl From<iroh::endpoint::ConnectionType> for ConnectionType {
 pub fn endpoint_conn_type_cb(
     ep: repr_c::Box<Endpoint>,
     ctx: *const c_void,
-    node_id: &PublicKey,
+    endpoint_id: &PublicKey,
     cb: unsafe extern "C" fn(ctx: *const c_void, err: EndpointResult, conn_type: ConnectionType),
 ) {
     // hack around the fact that `*const c_void` is not Send
@@ -769,7 +772,7 @@ pub fn endpoint_conn_type_cb(
     unsafe impl Send for CtxPtr {}
     let ctx_ptr = CtxPtr(ctx);
 
-    let node_id: NodeId = node_id.into();
+    let endpoint_id: EndpointId = endpoint_id.into();
 
     TOKIO_EXECUTOR.spawn(async move {
         // make the compiler happy
@@ -781,7 +784,7 @@ pub fn endpoint_conn_type_cb(
             .await
             .as_ref()
             .expect("endpoint not initalized")
-            .conn_type(node_id)
+            .conn_type(endpoint_id)
         {
             None => {
                 unsafe {
@@ -923,14 +926,14 @@ pub fn connection_closed(conn: repr_c::Box<Connection>) -> EndpointResult {
     }
 }
 
-/// Connects to the given node.
+/// Connects to the given endpoint.
 ///
 /// Blocks until the connection is established.
 #[ffi_export]
 pub fn endpoint_connect(
     ep: &repr_c::Box<Endpoint>,
     alpn: slice::slice_ref<'_, u8>,
-    node_addr: NodeAddr,
+    endpoint_addr: EndpointAddr,
     out: &repr_c::Box<Connection>,
 ) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
@@ -940,7 +943,7 @@ pub fn endpoint_connect(
             .await
             .as_ref()
             .expect("endpoint not initialized")
-            .connect(node_addr, alpn.as_ref())
+            .connect(endpoint_addr, alpn.as_ref())
             .await?;
         out.connection.write().await.replace(conn);
 
@@ -975,9 +978,9 @@ pub fn endpoint_close(ep: repr_c::Box<Endpoint>) {
     });
 }
 
-/// Get the node dialing information of this iroh endpoint.
+/// Get the endpoint dialing information of this iroh endpoint.
 #[ffi_export]
-pub fn endpoint_node_addr(ep: &repr_c::Box<Endpoint>, out: &mut NodeAddr) -> EndpointResult {
+pub fn endpoint_addr(ep: &repr_c::Box<Endpoint>, out: &mut EndpointAddr) -> EndpointResult {
     let res = TOKIO_EXECUTOR.block_on(async move {
         let addr = ep
             .ep
@@ -985,7 +988,7 @@ pub fn endpoint_node_addr(ep: &repr_c::Box<Endpoint>, out: &mut NodeAddr) -> End
             .await
             .as_ref()
             .expect("endpoint not initialized")
-            .node_addr();
+            .addr();
         anyhow::Ok(addr)
     });
 
@@ -1034,7 +1037,7 @@ pub fn endpoint_online(ep: &repr_c::Box<Endpoint>, timeout_ms: u64) -> EndpointR
 #[cfg(test)]
 mod tests {
     use crate::{
-        addr::node_addr_default,
+        addr::endpoint_addr_default,
         stream::{
             recv_stream_default, recv_stream_read, send_stream_default, send_stream_finish,
             send_stream_write,
@@ -1080,11 +1083,11 @@ mod tests {
             let bind_res = endpoint_bind(&config_server, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
-            let mut node_addr = node_addr_default();
-            let res = endpoint_node_addr(&ep, &mut node_addr);
+            let mut addr = endpoint_addr_default();
+            let res = endpoint_addr(&ep, &mut addr);
             assert_eq!(res, EndpointResult::Ok);
 
-            s.send(node_addr).unwrap();
+            s.send(addr).unwrap();
 
             // accept connection
             println!("[s] endpoint accept");
@@ -1119,12 +1122,12 @@ mod tests {
             assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
-            let node_addr = r.recv().unwrap();
+            let addr = r.recv().unwrap();
 
             println!("[c] dialing");
             // connect to server
             let conn = connection_default();
-            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &conn);
+            let connect_res = endpoint_connect(&ep, alpn.as_ref(), addr, &conn);
             assert_eq!(connect_res, EndpointResult::Ok);
 
             println!("[c] connection open uni");
@@ -1167,11 +1170,11 @@ mod tests {
             let bind_res = endpoint_bind(&config_server, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
-            let mut node_addr = node_addr_default();
-            let res = endpoint_node_addr(&ep, &mut node_addr);
+            let mut addr = endpoint_addr_default();
+            let res = endpoint_addr(&ep, &mut addr);
             assert_eq!(res, EndpointResult::Ok);
 
-            s.send(node_addr).unwrap();
+            s.send(addr).unwrap();
 
             // accept connection
             println!("[s] accepting conn");
@@ -1204,12 +1207,12 @@ mod tests {
             assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
-            let node_addr = r.recv().unwrap();
+            let addr = r.recv().unwrap();
 
             println!("[c] dialing");
             // connect to server
             let conn = connection_default();
-            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &conn);
+            let connect_res = endpoint_connect(&ep, alpn.as_ref(), addr, &conn);
             assert_eq!(connect_res, EndpointResult::Ok);
 
             println!("[c] accepting uni");
@@ -1254,11 +1257,11 @@ mod tests {
             let bind_res = endpoint_bind(&config_server, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
-            let mut node_addr = node_addr_default();
-            let res = endpoint_node_addr(&ep, &mut node_addr);
+            let mut addr = endpoint_addr_default();
+            let res = endpoint_addr(&ep, &mut addr);
             assert_eq!(res, EndpointResult::Ok);
 
-            s.send(node_addr).unwrap();
+            s.send(addr).unwrap();
 
             // accept connection
             println!("[s] accepting conn");
@@ -1283,12 +1286,12 @@ mod tests {
             assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
-            let node_addr = r.recv().unwrap();
+            let addr = r.recv().unwrap();
 
             println!("[c] dialing");
             // connect to server
             let conn = connection_default();
-            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &conn);
+            let connect_res = endpoint_connect(&ep, alpn.as_ref(), addr, &conn);
             assert_eq!(connect_res, EndpointResult::Ok);
 
             println!("[c] sending");
@@ -1327,11 +1330,11 @@ mod tests {
             let bind_res = endpoint_bind(&config_server, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
-            let mut node_addr = node_addr_default();
-            let res = endpoint_node_addr(&ep, &mut node_addr);
+            let mut addr = endpoint_addr_default();
+            let res = endpoint_addr(&ep, &mut addr);
             assert_eq!(res, EndpointResult::Ok);
 
-            s.send(node_addr).unwrap();
+            s.send(addr).unwrap();
 
             // accept connection
             println!("[s] accepting conn");
@@ -1371,12 +1374,12 @@ mod tests {
             assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
-            let node_addr = r.recv().unwrap();
+            let addr = r.recv().unwrap();
 
             println!("[c] dialing");
             // connect to server
             let conn = connection_default();
-            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &conn);
+            let connect_res = endpoint_connect(&ep, alpn.as_ref(), addr, &conn);
             assert_eq!(connect_res, EndpointResult::Ok);
 
             let mut send_stream = send_stream_default();
@@ -1434,11 +1437,11 @@ mod tests {
             let bind_res = endpoint_bind(&config_server, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
-            let mut node_addr = node_addr_default();
-            let res = endpoint_node_addr(&ep, &mut node_addr);
+            let mut addr = endpoint_addr_default();
+            let res = endpoint_addr(&ep, &mut addr);
             assert_eq!(res, EndpointResult::Ok);
 
-            s.send(node_addr).unwrap();
+            s.send(addr).unwrap();
 
             let mut handles = Vec::new();
             let ep = Arc::new(ep);
@@ -1508,7 +1511,7 @@ mod tests {
             assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
-            let node_addr = r.recv().unwrap();
+            let addr = r.recv().unwrap();
 
             let mut handles = Vec::new();
             let ep = Arc::new(ep);
@@ -1518,7 +1521,7 @@ mod tests {
                 let ep = ep.clone();
                 let alpn1 = alpn1.clone();
                 let alpn2 = alpn2.clone();
-                let node_addr = node_addr.clone();
+                let addr = addr.clone();
 
                 handles.push(std::thread::spawn(move || {
                     // wait for a moment to make sure the server is ready
@@ -1528,7 +1531,7 @@ mod tests {
                     // connect to server
                     let conn = connection_default();
                     let alpn = if i == 0 { alpn1 } else { alpn2 };
-                    let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr, &conn);
+                    let connect_res = endpoint_connect(&ep, alpn.as_ref(), addr, &conn);
                     assert_eq!(connect_res, EndpointResult::Ok);
 
                     let mut send_stream = send_stream_default();
@@ -1606,11 +1609,11 @@ mod tests {
             let bind_res = endpoint_bind(&config_server, None, None, &ep);
             assert_eq!(bind_res, EndpointResult::Ok);
 
-            let mut node_addr = node_addr_default();
-            let res = endpoint_node_addr(&ep, &mut node_addr);
+            let mut addr = endpoint_addr_default();
+            let res = endpoint_addr(&ep, &mut addr);
             assert_eq!(res, EndpointResult::Ok);
 
-            s.send(node_addr).unwrap();
+            s.send(addr).unwrap();
 
             let ep = Arc::new(ep);
             let alpn_s = alpn_s.clone();
@@ -1663,7 +1666,7 @@ mod tests {
             assert_eq!(bind_res, EndpointResult::Ok);
 
             // wait for addr from server
-            let node_addr = r.recv().unwrap();
+            let addr = r.recv().unwrap();
 
             let alpn = alpn.clone();
 
@@ -1673,7 +1676,7 @@ mod tests {
             println!("[c] dialing");
             // connect to server
             let conn = connection_default();
-            let connect_res = endpoint_connect(&ep, alpn.as_ref(), node_addr.clone(), &conn);
+            let connect_res = endpoint_connect(&ep, alpn.as_ref(), addr.clone(), &conn);
             assert_eq!(connect_res, EndpointResult::Ok);
 
             let mut send_stream = send_stream_default();
@@ -1682,7 +1685,7 @@ mod tests {
             assert_eq!(open_res, EndpointResult::Ok);
 
             let s_ptr: *const c_void = &callback_s as *const _ as *const c_void;
-            endpoint_conn_type_cb(ep, s_ptr, &node_addr.node_id, conn_type_callback);
+            endpoint_conn_type_cb(ep, s_ptr, &addr.id, conn_type_callback);
 
             println!("[c] sending");
             let send_res = send_stream_write(&mut send_stream, "hello world".as_bytes().into());

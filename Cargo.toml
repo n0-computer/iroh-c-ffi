@@ -29,10 +29,12 @@ tokio = { version = "1.45.1", features = ["rt-multi-thread"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 url = "2.5"
-n0-future = "0.1.2"
+n0-future = "0.3.0"
 n0-snafu = "0.2.2"
 snafu = "0.8.6"
 data-encoding = "2.9.0"
+
+iroh-tickets = { git = "https://github.com/n0-computer/iroh-tickets", branch = "main" }
 
 [features]
 # generate headers

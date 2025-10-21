@@ -73,7 +73,7 @@ enum EndpointResult {
      */
     ENDPOINT_RESULT_CONNECT_ERROR,
     /** \brief
-     *  Unable to retrive node addr.
+     *  Unable to retrive endpoint addr.
      */
     ENDPOINT_RESULT_ADDR_ERROR,
     /** \brief
@@ -103,7 +103,7 @@ enum EndpointResult {
      */
     ENDPOINT_RESULT_INCOMING_ERROR,
     /** \brief
-     *  Unable to find connection for the given `NodeId`
+     *  Unable to find connection for the given `EndpointId`
      */
     ENDPOINT_RESULT_CONNECTION_TYPE_ERROR,
 }
@@ -344,6 +344,185 @@ endpoint_accept_any_cb (
     void const * ctx,
     void (*cb)(void const *, EndpointResult_t, Vec_uint8_t, Connection_t *));
 
+typedef struct {
+    uint8_t idx[32];
+} uint8_32_array_t;
+
+/** \brief
+ *  A public key.
+ */
+typedef struct PublicKey {
+    /** <No documentation available> */
+    uint8_32_array_t key;
+} PublicKey_t;
+
+/** \brief
+ *  Represents a valid URL.
+ */
+typedef struct Url Url_t;
+
+/** \brief
+ *  Same as [`Vec<T>`][`rust::Vec`], but with guaranteed `#[repr(C)]` layout
+ */
+typedef struct Vec_Url_ptr {
+    /** <No documentation available> */
+    Url_t * * ptr;
+
+    /** <No documentation available> */
+    size_t len;
+
+    /** <No documentation available> */
+    size_t cap;
+} Vec_Url_ptr_t;
+
+/** \brief
+ *  Represents an IPv4 or IPv6 address, including a port number.
+ */
+typedef struct SocketAddr SocketAddr_t;
+
+/** \brief
+ *  Same as [`Vec<T>`][`rust::Vec`], but with guaranteed `#[repr(C)]` layout
+ */
+typedef struct Vec_SocketAddr_ptr {
+    /** <No documentation available> */
+    SocketAddr_t * * ptr;
+
+    /** <No documentation available> */
+    size_t len;
+
+    /** <No documentation available> */
+    size_t cap;
+} Vec_SocketAddr_ptr_t;
+
+/** \brief
+ *  A peer and it's addressing information.
+ */
+typedef struct EndpointAddr {
+    /** \brief
+     *  The endpoint's public key.
+     */
+    PublicKey_t id;
+
+    /** \brief
+     *  The peers relay urls.
+     */
+    Vec_Url_ptr_t relay_urls;
+
+    /** \brief
+     *  The peers IP addresses
+     */
+    Vec_SocketAddr_ptr_t ip_addrs;
+} EndpointAddr_t;
+
+/** \brief
+ *  Get the endpoint dialing information of this iroh endpoint.
+ */
+EndpointResult_t
+endpoint_addr (
+    Endpoint_t * const * ep,
+    EndpointAddr_t * out);
+
+/** \brief
+ *  Add the given direct addresses to the peer's addr info.
+ */
+void
+endpoint_addr_add_ip_address (
+    EndpointAddr_t * endpoint_addr,
+    SocketAddr_t * address);
+
+/** \brief
+ *  Add a relay url to the peer's addr info.
+ */
+void
+endpoint_addr_add_relay_url (
+    EndpointAddr_t * addr,
+    Url_t * relay_url);
+
+/** \brief
+ *  Formats the given endpoint addr as a string.
+ *
+ *  Result must be freed with `rust_free_string`
+ */
+char *
+endpoint_addr_as_str (
+    EndpointAddr_t const * addr);
+
+/** \brief
+ *  Create a an empty (invalid) addr with no details.
+ *
+ *  Must be freed using `endpoint_addr_free`.
+ */
+EndpointAddr_t
+endpoint_addr_default (void);
+
+/** \brief
+ *  Free the endpoint addr.
+ */
+void
+endpoint_addr_free (
+    EndpointAddr_t endpoint_addr);
+
+/** <No documentation available> */
+/** \remark Has the same ABI as `uint8_t` **/
+#ifdef DOXYGEN
+typedef
+#endif
+enum AddrResult {
+    /** \brief
+     *  Everything is ok.
+     */
+    ADDR_RESULT_OK = 0,
+    /** \brief
+     *  Url was invalid.
+     */
+    ADDR_RESULT_INVALID_URL,
+    /** \brief
+     *  SocketAddr was invalid.
+     */
+    ADDR_RESULT_INVALID_SOCKET_ADDR,
+    /** \brief
+     *  The endpoint addr was invalid.
+     */
+    ADDR_RESULT_INVALID_ENDPOINT_ADDR,
+}
+#ifndef DOXYGEN
+; typedef uint8_t
+#endif
+AddrResult_t;
+
+/** \brief
+ *  Parses the full endpoint addr string representation.
+ */
+AddrResult_t
+endpoint_addr_from_string (
+    char const * input,
+    EndpointAddr_t * out);
+
+/** \brief
+ *  Get the nth direct addresses of this peer.
+ */
+SocketAddr_t const *
+endpoint_addr_ip_addresses_nth (
+    EndpointAddr_t const * addr,
+    size_t i);
+
+/** \brief
+ *  Create a new addr with no details.
+ *
+ *  Must be freed using `endpoint_addr_free`.
+ */
+EndpointAddr_t
+endpoint_addr_new (
+    PublicKey_t id);
+
+/** \brief
+ *  Get the relay url of this peer.
+ */
+Url_t * const *
+endpoint_addr_relay_urls_nth (
+    EndpointAddr_t const * addr,
+    size_t i);
+
 /** \brief
  *  The options to configure relay.
  */
@@ -375,19 +554,19 @@ typedef
 #endif
 enum DiscoveryConfig {
     /** \brief
-     *  Use no node discovery mechanism. The default.
+     *  Use no discovery mechanism. The default.
      */
     DISCOVERY_CONFIG_NONE,
     /** \brief
      *  DNS Discovery service.
      *
-     *  Allows for global node discovery. Requires access to the internet to work properly.
+     *  Allows for global endpoint discovery. Requires access to the internet to work properly.
      */
     DISCOVERY_CONFIG_D_N_S,
     /** \brief
      *  Mdns Discovery service.
      *
-     *  Allows for local node discovery. Discovers other iroh nodes in your local network
+     *  Allows for local endpoint discovery. Discovers other iroh endpoints in your local network
      *  If your local network does not have multicast abilities, creating a local swarm discovery service will log an error, but fail silently.
      */
     DISCOVERY_CONFIG_MDNS,
@@ -505,18 +684,6 @@ void
 endpoint_config_free (
     EndpointConfig_t config);
 
-typedef struct {
-    uint8_t idx[32];
-} uint8_32_array_t;
-
-/** \brief
- *  A public key.
- */
-typedef struct PublicKey {
-    /** <No documentation available> */
-    uint8_32_array_t key;
-} PublicKey_t;
-
 /** <No documentation available> */
 /** \remark Has the same ABI as `uint8_t` **/
 #ifdef DOXYGEN
@@ -560,55 +727,11 @@ void
 endpoint_conn_type_cb (
     Endpoint_t * ep,
     void const * ctx,
-    PublicKey_t const * node_id,
+    PublicKey_t const * endpoint_id,
     void (*cb)(void const *, EndpointResult_t, ConnectionType_t));
 
 /** \brief
- *  Represents a valid URL.
- */
-typedef struct Url Url_t;
-
-/** \brief
- *  Represents an IPv4 or IPv6 address, including a port number.
- */
-typedef struct SocketAddr SocketAddr_t;
-
-/** \brief
- *  Same as [`Vec<T>`][`rust::Vec`], but with guaranteed `#[repr(C)]` layout
- */
-typedef struct Vec_SocketAddr_ptr {
-    /** <No documentation available> */
-    SocketAddr_t * * ptr;
-
-    /** <No documentation available> */
-    size_t len;
-
-    /** <No documentation available> */
-    size_t cap;
-} Vec_SocketAddr_ptr_t;
-
-/** \brief
- *  A peer and it's addressing information.
- */
-typedef struct NodeAddr {
-    /** \brief
-     *  The node's public key.
-     */
-    PublicKey_t node_id;
-
-    /** \brief
-     *  The peer's home RELAY url.
-     */
-    Url_t * relay_url;
-
-    /** \brief
-     *  Socket addresses where the peer might be reached directly.
-     */
-    Vec_SocketAddr_ptr_t direct_addresses;
-} NodeAddr_t;
-
-/** \brief
- *  Connects to the given node.
+ *  Connects to the given endpoint.
  *
  *  Blocks until the connection is established.
  */
@@ -616,7 +739,7 @@ EndpointResult_t
 endpoint_connect (
     Endpoint_t * const * ep,
     slice_ref_uint8_t alpn,
-    NodeAddr_t node_addr,
+    EndpointAddr_t endpoint_addr,
     Connection_t * const * out);
 
 /** \brief
@@ -645,14 +768,6 @@ endpoint_network_change (
     Endpoint_t * const * ep);
 
 /** \brief
- *  Get the node dialing information of this iroh endpoint.
- */
-EndpointResult_t
-endpoint_node_addr (
-    Endpoint_t * const * ep,
-    NodeAddr_t * out);
-
-/** \brief
  *  Returns once the endpoint is online.
  *
  *  We are considered online if we have a home relay and at least one
@@ -672,108 +787,6 @@ endpoint_online (
  */
 void
 iroh_enable_tracing (void);
-
-/** \brief
- *  Add the given direct addresses to the peer's addr info.
- */
-void
-node_addr_add_direct_address (
-    NodeAddr_t * node_addr,
-    SocketAddr_t * address);
-
-/** \brief
- *  Add a relay url to the peer's addr info.
- */
-void
-node_addr_add_relay_url (
-    NodeAddr_t * addr,
-    Url_t * relay_url);
-
-/** \brief
- *  Formats the given node addr as a string.
- *
- *  Result must be freed with `rust_free_string`
- */
-char *
-node_addr_as_str (
-    NodeAddr_t const * addr);
-
-/** \brief
- *  Create a an empty (invalid) addr with no details.
- *
- *  Must be freed using `node_addr_free`.
- */
-NodeAddr_t
-node_addr_default (void);
-
-/** \brief
- *  Get the nth direct addresses of this peer.
- *
- *  Panics if i is larger than the available addrs.
- */
-SocketAddr_t const *
-node_addr_direct_addresses_nth (
-    NodeAddr_t const * addr,
-    size_t i);
-
-/** \brief
- *  Free the node addr.
- */
-void
-node_addr_free (
-    NodeAddr_t node_addr);
-
-/** <No documentation available> */
-/** \remark Has the same ABI as `uint8_t` **/
-#ifdef DOXYGEN
-typedef
-#endif
-enum AddrResult {
-    /** \brief
-     *  Everything is ok.
-     */
-    ADDR_RESULT_OK = 0,
-    /** \brief
-     *  Url was invalid.
-     */
-    ADDR_RESULT_INVALID_URL,
-    /** \brief
-     *  SocketAddr was invalid.
-     */
-    ADDR_RESULT_INVALID_SOCKET_ADDR,
-    /** \brief
-     *  The node addr was invalid.
-     */
-    ADDR_RESULT_INVALID_NODE_ADDR,
-}
-#ifndef DOXYGEN
-; typedef uint8_t
-#endif
-AddrResult_t;
-
-/** \brief
- *  Parses the full node addr string representation.
- */
-AddrResult_t
-node_addr_from_string (
-    char const * input,
-    NodeAddr_t * out);
-
-/** \brief
- *  Create a new addr with no details.
- *
- *  Must be freed using `node_addr_free`.
- */
-NodeAddr_t
-node_addr_new (
-    PublicKey_t node_id);
-
-/** \brief
- *  Get the relay url of this peer.
- */
-Url_t * const *
-node_addr_relay_url (
-    NodeAddr_t const * addr);
 
 /** \brief
  *  Returns the public key as a base32 string.
