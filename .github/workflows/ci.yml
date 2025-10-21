@@ -84,10 +84,10 @@ jobs:
                 json_output=$(echo $line | jq .)
 
                 # Store variables
-                node_id=$(echo $json_output | jq -r '.node_id')
+                endpoint_id=$(echo $json_output | jq -r '.endpoint_id')
                 relay=$(echo $json_output | jq -r '.relay')
                 addrs=$(echo $json_output | jq -r '.addrs[]')
-                ./main client $node_id $relay ${addrs[@]}
+                ./main client $endpoint_id $relay ${addrs[@]}
                 sleep 10
 
                 # wait for server the shutdown
@@ -218,10 +218,10 @@ jobs:
                 $json_output = ConvertFrom-Json $line
 
                 # Store variables
-                $node_id = $json_output.node_id
+                $endpoint_id = $json_output.endpoint_id
                 $relay = $json_output.relay
                 $addrs = $json_output.addrs
-                & "./main" "client" $node_id $relay $addrs
+                & "./main" "client" $endpoint_id $relay $addrs
 
                 # wait for the server process to terminate
                 Wait-Process -InputObject $server_process

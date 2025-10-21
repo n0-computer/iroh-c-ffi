@@ -1,5 +1,5 @@
-use iroh::RelayUrl;
-use iroh_base::ticket::NodeTicket;
+use iroh::{RelayUrl, TransportAddr};
+use iroh_tickets::endpoint::EndpointTicket;
 use safer_ffi::{prelude::*, vec};
 
 use crate::key::PublicKey;
@@ -8,132 +8,140 @@ use crate::key::PublicKey;
 #[derive_ReprC]
 #[repr(C)]
 #[derive(Debug, Clone)]
-pub struct NodeAddr {
-    /// The node's public key.
-    pub node_id: PublicKey,
-    /// The peer's home RELAY url.
-    pub relay_url: Option<repr_c::Box<Url>>,
-    /// Socket addresses where the peer might be reached directly.
-    pub direct_addresses: vec::Vec<repr_c::Box<SocketAddr>>,
+pub struct EndpointAddr {
+    /// The endpoint's public key.
+    pub id: PublicKey,
+    /// The peers relay urls.
+    pub relay_urls: vec::Vec<repr_c::Box<Url>>,
+    /// The peers IP addresses
+    pub ip_addrs: vec::Vec<repr_c::Box<SocketAddr>>,
 }
 
-impl PartialEq for NodeAddr {
+impl PartialEq for EndpointAddr {
     fn eq(&self, other: &Self) -> bool {
-        let a: iroh::NodeAddr = self.clone().into();
-        let b: iroh::NodeAddr = other.clone().into();
+        let a: iroh::EndpointAddr = self.clone().into();
+        let b: iroh::EndpointAddr = other.clone().into();
         a.eq(&b)
     }
 }
 
-impl From<NodeAddr> for iroh::NodeAddr {
-    fn from(addr: NodeAddr) -> Self {
-        let direct_addresses = addr.direct_addresses.iter().map(|a| a.addr).collect();
-        iroh::NodeAddr {
-            node_id: addr.node_id.into(),
-            relay_url: addr
-                .relay_url
-                .map(|u| u.url.clone().expect("url not initialized")),
-            direct_addresses,
-        }
+impl From<EndpointAddr> for iroh::EndpointAddr {
+    fn from(addr: EndpointAddr) -> Self {
+        let ip_addrs = addr.ip_addrs.into_iter().map(|a| TransportAddr::Ip(a.addr));
+        let relay_urls = addr
+            .relay_urls
+            .into_iter()
+            .filter_map(|url| url.url.clone().map(TransportAddr::Relay));
+
+        iroh::EndpointAddr::from_parts(addr.id.into(), relay_urls.chain(ip_addrs))
     }
 }
 
-impl From<iroh::NodeAddr> for NodeAddr {
-    fn from(addr: iroh::NodeAddr) -> Self {
-        let direct_addresses = addr
-            .direct_addresses
-            .into_iter()
-            .map(|addr| Box::new(SocketAddr { addr }).into())
+impl From<iroh::EndpointAddr> for EndpointAddr {
+    fn from(addr: iroh::EndpointAddr) -> Self {
+        let ip_addrs = addr
+            .ip_addrs()
+            .map(|addr| Box::new(SocketAddr { addr: *addr }).into())
             .collect::<Vec<_>>()
             .into();
-        NodeAddr {
-            node_id: addr.node_id.into(),
-            relay_url: addr
-                .relay_url
-                .map(|url| Box::new(Url { url: Some(url) }).into()),
-            direct_addresses,
+        EndpointAddr {
+            id: addr.id.into(),
+            relay_urls: addr
+                .relay_urls()
+                .map(|url| {
+                    Box::new(Url {
+                        url: Some(url.clone()),
+                    })
+                    .into()
+                })
+                .collect::<Vec<_>>()
+                .into(),
+            ip_addrs,
         }
     }
 }
 
 /// Create a new addr with no details.
 ///
-/// Must be freed using `node_addr_free`.
+/// Must be freed using `endpoint_addr_free`.
 #[ffi_export]
-pub fn node_addr_new(node_id: PublicKey) -> NodeAddr {
-    NodeAddr {
-        node_id,
-        relay_url: None,
-        direct_addresses: vec::Vec::EMPTY,
+pub fn endpoint_addr_new(id: PublicKey) -> EndpointAddr {
+    EndpointAddr {
+        id,
+        relay_urls: vec::Vec::EMPTY,
+        ip_addrs: vec::Vec::EMPTY,
     }
 }
 
 /// Create a an empty (invalid) addr with no details.
 ///
-/// Must be freed using `node_addr_free`.
+/// Must be freed using `endpoint_addr_free`.
 #[ffi_export]
-pub fn node_addr_default() -> NodeAddr {
-    NodeAddr {
-        node_id: PublicKey::default(),
-        relay_url: None,
-        direct_addresses: vec::Vec::EMPTY,
+pub fn endpoint_addr_default() -> EndpointAddr {
+    EndpointAddr {
+        id: PublicKey::default(),
+        relay_urls: vec::Vec::EMPTY,
+        ip_addrs: vec::Vec::EMPTY,
     }
 }
 
-/// Parses the full node addr string representation.
+/// Parses the full endpoint addr string representation.
 #[ffi_export]
-pub fn node_addr_from_string(input: char_p::Ref<'_>, out: &mut NodeAddr) -> AddrResult {
-    let ticket: Result<NodeTicket, _> = input.to_str().parse();
+pub fn endpoint_addr_from_string(input: char_p::Ref<'_>, out: &mut EndpointAddr) -> AddrResult {
+    let ticket: Result<EndpointTicket, _> = input.to_str().parse();
     match ticket {
         Ok(ticket) => {
-            *out = ticket.node_addr().clone().into();
+            *out = ticket.endpoint_addr().clone().into();
             AddrResult::Ok
         }
-        Err(_err) => AddrResult::InvalidNodeAddr,
+        Err(_err) => AddrResult::InvalidEndpointAddr,
     }
 }
 
-/// Formats the given node addr as a string.
+/// Formats the given endpoint addr as a string.
 ///
 /// Result must be freed with `rust_free_string`
 #[ffi_export]
-pub fn node_addr_as_str(addr: &NodeAddr) -> char_p::Box {
-    let addr: iroh::NodeAddr = addr.clone().into();
-    NodeTicket::new(addr).to_string().try_into().unwrap()
+pub fn endpoint_addr_as_str(addr: &EndpointAddr) -> char_p::Box {
+    let addr: iroh::EndpointAddr = addr.clone().into();
+    EndpointTicket::new(addr).to_string().try_into().unwrap()
 }
 
-/// Free the node addr.
+/// Free the endpoint addr.
 #[ffi_export]
-pub fn node_addr_free(node_addr: NodeAddr) {
-    drop(node_addr)
+pub fn endpoint_addr_free(endpoint_addr: EndpointAddr) {
+    drop(endpoint_addr)
 }
 
 /// Add a relay url to the peer's addr info.
 #[ffi_export]
-pub fn node_addr_add_relay_url(addr: &mut NodeAddr, relay_url: repr_c::Box<Url>) {
-    addr.relay_url.replace(relay_url);
+pub fn endpoint_addr_add_relay_url(addr: &mut EndpointAddr, relay_url: repr_c::Box<Url>) {
+    addr.relay_urls.with_rust_mut(|addrs| {
+        addrs.push(relay_url);
+    });
 }
 
 /// Add the given direct addresses to the peer's addr info.
 #[ffi_export]
-pub fn node_addr_add_direct_address(node_addr: &mut NodeAddr, address: repr_c::Box<SocketAddr>) {
-    node_addr.direct_addresses.with_rust_mut(|addrs| {
+pub fn endpoint_addr_add_ip_addrs(
+    endpoint_addr: &mut EndpointAddr,
+    address: repr_c::Box<SocketAddr>,
+) {
+    endpoint_addr.ip_addrs.with_rust_mut(|addrs| {
         addrs.push(address);
     });
 }
 
 /// Get the nth direct addresses of this peer.
-///
-/// Panics if i is larger than the available addrs.
 #[ffi_export]
-pub fn node_addr_direct_addresses_nth(addr: &NodeAddr, i: usize) -> &SocketAddr {
-    &addr.direct_addresses[i]
+pub fn endpoint_addr_ip_addrs_nth(addr: &EndpointAddr, i: usize) -> Option<&SocketAddr> {
+    addr.ip_addrs.get(i).map(|addr| &**addr)
 }
 
 /// Get the relay url of this peer.
 #[ffi_export]
-pub fn node_addr_relay_url(addr: &NodeAddr) -> Option<&repr_c::Box<Url>> {
-    addr.relay_url.as_ref()
+pub fn endpoint_addr_relay_urls_nth(addr: &EndpointAddr, i: usize) -> Option<&repr_c::Box<Url>> {
+    addr.relay_urls.get(i)
 }
 
 /// Represents an IPv4 or IPv6 address, including a port number.
@@ -344,8 +352,8 @@ pub enum AddrResult {
     InvalidUrl,
     /// SocketAddr was invalid.
     InvalidSocketAddr,
-    /// The node addr was invalid.
-    InvalidNodeAddr,
+    /// The endpoint addr was invalid.
+    InvalidEndpointAddr,
 }
 
 /// Try to parse a url from a string.
@@ -367,27 +375,27 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_roundrip_string_node_addr() {
-        let mut node_addr = node_addr_default();
-        node_addr.node_id = public_key_default();
-        node_addr_add_relay_url(
-            &mut node_addr,
+    fn test_roundrip_string_endpoint_addr() {
+        let mut endpoint_addr = endpoint_addr_default();
+        endpoint_addr.id = public_key_default();
+        endpoint_addr_add_relay_url(
+            &mut endpoint_addr,
             Box::new(Url::from("http://test.com".parse::<RelayUrl>().unwrap())).into(),
         );
-        node_addr_add_direct_address(
-            &mut node_addr,
+        endpoint_addr_add_ip_addrs(
+            &mut endpoint_addr,
             Box::new(SocketAddr::from(
                 "127.0.0.1:1234".parse::<std::net::SocketAddr>().unwrap(),
             ))
             .into(),
         );
 
-        dbg!(&node_addr);
-        let string = node_addr_as_str(&node_addr);
+        dbg!(&endpoint_addr);
+        let string = endpoint_addr_as_str(&endpoint_addr);
 
-        let mut back = node_addr_default();
-        let res = node_addr_from_string(string.as_ref(), &mut back);
+        let mut back = endpoint_addr_default();
+        let res = endpoint_addr_from_string(string.as_ref(), &mut back);
         assert_eq!(res, AddrResult::Ok);
-        assert_eq!(back, node_addr);
+        assert_eq!(back, endpoint_addr);
     }
 }
