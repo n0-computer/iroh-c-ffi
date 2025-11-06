@@ -1409,7 +1409,7 @@ dependencies = [
 
 [[package]]
 name = "iroh-c-ffi"
-version = "0.94.0"
+version = "0.95.0"
 dependencies = [
  "anyhow",
  "bytes",
