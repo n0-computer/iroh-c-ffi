@@ -12,9 +12,7 @@ use iroh::{
     EndpointId, Watcher,
 };
 use n0_future::StreamExt;
-use n0_snafu::SpanTrace;
 use safer_ffi::{prelude::*, slice, vec};
-use snafu::GenerateImplicitData;
 use tokio::sync::RwLock;
 use tracing::{debug, error, warn};
 
@@ -593,11 +591,8 @@ pub fn endpoint_accept(
     let res = TOKIO_EXECUTOR.block_on(async move {
         let (alpn, connection) = accept_conn(ep).await?;
         if alpn != expected_alpn.as_slice() {
-            return Err(AcceptError::ALPNError(
-                iroh::endpoint::AlpnError::Unavailable {
-                    backtrace: None,
-                    span_trace: SpanTrace::generate(),
-                },
+            return Err(AcceptError::ConnectionError(
+                anyhow::anyhow!("ALPN mismatch: expected {:?}, got {:?}", expected_alpn.as_slice(), alpn)
             ));
         }
         out.connection.write().await.replace(connection);
