@@ -435,19 +435,20 @@ pub fn connection_rtt(conn: &repr_c::Box<Connection>) -> u64 {
 }
 
 /// Returns the ratio of lost packets to sent packets.
-#[ffi_export]
-pub fn connection_packet_loss(conn: &repr_c::Box<Connection>) -> f64 {
-    let stats = TOKIO_EXECUTOR.block_on(async move {
-        conn.connection
-            .read()
-            .await
-            .as_ref()
-            .expect("connection not initialized")
-            .stats()
-    });
-    let path_stats = stats.path;
-    path_stats.lost_packets as f64 / path_stats.sent_packets as f64
-}
+// TODO(ramfox): how to calculate packet loss on a connection?
+// #[ffi_export]
+// pub fn connection_packet_loss(conn: &repr_c::Box<Connection>) -> f64 {
+//     let stats = TOKIO_EXECUTOR.block_on(async move {
+//         conn.connection
+//             .read()
+//             .await
+//             .as_ref()
+//             .expect("connection not initialized")
+//             .stats()
+//     });
+//     let path_stats = stats.path;
+//     path_stats.lost_packets as f64 / path_stats.sent_packets as f64
+// }
 
 /// Send a single datgram (unreliably).
 ///
