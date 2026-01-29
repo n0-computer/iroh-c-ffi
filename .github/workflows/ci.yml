@@ -188,17 +188,19 @@ jobs:
                 msystem: MINGW64
                 update: true
                 install: mingw-w64-x86_64-toolchain
-                path-type: inherit
             - name: run tests
+              shell: msys2 {0}
               run: |
                 cargo nextest run --all-features --lib --bins --tests --no-fail-fast
               env:
                 RUST_LOG: "TRACE"
             - name: build
+              shell: msys2 {0}
               run: |
                 cargo build --release --target ${{ matrix.target }}
                 cargo run --features headers --bin generate_headers --release --target ${{ matrix.target }}
             - name: build test binary
+              shell: msys2 {0}
               run: |
                 cp target/x86_64-pc-windows-gnu/release/iroh_c_ffi.dll iroh_c_ffi.dll
                 gcc -o main.exe main.c -L target/x86_64-pc-windows-gnu/release -liroh_c_ffi -lm -lkernel32 -ladvapi32 -lbcrypt -lntdll -luserenv -lws2_32 -lmsvcrt
