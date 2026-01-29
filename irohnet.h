@@ -195,7 +195,8 @@ connection_open_uni (
     SendStream_t * * out);
 
 /** \brief
- *  Returns the ratio of lost packets to sent packets.
+ *  Returns the ratio of lost packets to sent packets on the selected path.
+ *  Returns 0.0 if no path is selected or no packets have been sent.
  */
 double
 connection_packet_loss (
@@ -243,7 +244,8 @@ connection_read_datagram_timeout (
     uint64_t timeout_ms);
 
 /** \brief
- *  Estimated roundtrip time for the current connection in milli seconds.
+ *  Estimated roundtrip time for the current connection's selected path in milli seconds.
+ *  Returns 0 if no path is selected.
  */
 uint64_t
 connection_rtt (
@@ -683,52 +685,6 @@ endpoint_config_default (void);
 void
 endpoint_config_free (
     EndpointConfig_t config);
-
-/** <No documentation available> */
-/** \remark Has the same ABI as `uint8_t` **/
-#ifdef DOXYGEN
-typedef
-#endif
-enum ConnectionType {
-    /** \brief
-     *  Direct UDP connection
-     */
-    CONNECTION_TYPE_DIRECT = 0,
-    /** \brief
-     *  Relay connection over relay
-     */
-    CONNECTION_TYPE_RELAY,
-    /** \brief
-     *  Both a UDP and a relay connection are used.
-     *
-     *  This is the case if we do have a UDP address, but are missing a recent confirmation that
-     *  the address works.
-     */
-    CONNECTION_TYPE_MIXED,
-    /** \brief
-     *  We have no verified connection to this PublicKey
-     */
-    CONNECTION_TYPE_NONE,
-}
-#ifndef DOXYGEN
-; typedef uint8_t
-#endif
-ConnectionType_t;
-
-/** \brief
- *  Run a callback each time the [`ConnectionType`] to that peer has changed.
- *
- *  Does not block. This will run until the connection has closed.
- *
- *  `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
- *  called from another thread.
- */
-void
-endpoint_conn_type_cb (
-    Endpoint_t * ep,
-    void const * ctx,
-    PublicKey_t const * endpoint_id,
-    void (*cb)(void const *, EndpointResult_t, ConnectionType_t));
 
 /** \brief
  *  Connects to the given endpoint.
