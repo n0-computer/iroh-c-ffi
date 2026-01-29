@@ -268,29 +268,6 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   return 0;
 }
 
-typedef struct ConnectionStatus {
-  EndpointResult_t res;
-  ConnectionType_t conn_type;
-} ConnectionStatus;
-
-void
-callback(
-  void const * ctx,
-  EndpointResult_t res,
-  ConnectionType_t conn_type
-)
-{
-  printf("Callback 0\n");
-  ConnectionStatus *cs;
-  printf("Callback 1\n");
-  cs = (ConnectionStatus *)ctx;
-  printf("Callback 2\n");
-  cs->res = res;
-  printf("Callback 3\n");
-  cs->conn_type = conn_type;
-  printf("Callback done\n");
-}
-
 int
 run_client (
   EndpointConfig_t * config,
@@ -351,10 +328,6 @@ run_client (
     fprintf(stderr, "failed to connect to server\n");
     return -1;
   }
-
-  ConnectionStatus *conn_status;
-  conn_status = malloc(sizeof(ConnectionStatus));
-  endpoint_conn_type_cb(ep, (const void *)conn_status, &addr.id, callback);
 
   SendStream_t * send_stream = send_stream_default();
   ret = connection_open_uni(&conn, &send_stream);
@@ -430,29 +403,6 @@ run_client (
   printf("received: '%s'\n", recv_str);
 
   fflush(stdout);
-  // check that we were able to use the conn_type callback
-  if (conn_status->res != ENDPOINT_RESULT_OK) {
-    fprintf(stderr, "callback failed to send a connection type\n");
-    return -1;
-  } else {
-    switch (conn_status->conn_type) {
-      case CONNECTION_TYPE_DIRECT:
-        printf("had a direct connection\n");
-        break;
-      case CONNECTION_TYPE_RELAY:
-        printf("had a relay connection\n");
-        break;
-      case CONNECTION_TYPE_MIXED:
-        printf("had a mixed connection\n");
-        break;
-      case CONNECTION_TYPE_NONE:
-        fprintf(stderr, "callback reported no connection\n");
-        return -1;
-      default:
-        fprintf(stderr, "unknown connection type reported: %i\n", conn_status->conn_type);
-        return -1;
-    }
-  }
 
   // finish
   ret = send_stream_finish(send_stream);
@@ -485,8 +435,6 @@ run_client (
   free(recv_str);
   printf("free recv_buffer\n");
   free(recv_buffer);
-  printf("free conn_status\n");
-  free(conn_status);
   return 0;
 }
 

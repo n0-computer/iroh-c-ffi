@@ -184,6 +184,15 @@ jobs:
                 $tmp | Expand-Archive -DestinationPath $outputDir -Force
                 $tmp | Remove-Item
             - uses: msys2/setup-msys2@v2
+              id: msys2
+              with:
+                msystem: MINGW64
+                update: true
+                install: mingw-w64-x86_64-toolchain
+            - name: Add MinGW to PATH
+              shell: pwsh
+              run: |
+                echo "${{ steps.msys2.outputs.msys2-location }}\mingw64\bin" >> $env:GITHUB_PATH
             - name: run tests
               run: |
                 cargo nextest run --all-features --lib --bins --tests --no-fail-fast
@@ -195,7 +204,7 @@ jobs:
                 cargo run --features headers --bin generate_headers --release --target ${{ matrix.target }}
             - name: build test binary
               run: |
-                cp target/x86_64-pc-windows-gnu/release/iroh_c_ffi.dll iroh_c_ffi.dll
+                Copy-Item target/x86_64-pc-windows-gnu/release/iroh_c_ffi.dll iroh_c_ffi.dll
                 gcc -o main.exe main.c -L target/x86_64-pc-windows-gnu/release -liroh_c_ffi -lm -lkernel32 -ladvapi32 -lbcrypt -lntdll -luserenv -lws2_32 -lmsvcrt
               env:
                 LD_LIBRARY_PATH: target/release

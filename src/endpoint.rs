@@ -3,21 +3,15 @@ use std::ops::Deref;
 use std::time::Duration;
 
 use anyhow::Context;
-use iroh::discovery::Discovery;
-use iroh::discovery::{
-    dns::DnsDiscovery, mdns::MdnsDiscovery, pkarr::PkarrPublisher, ConcurrentDiscovery,
-};
-use iroh::{
-    endpoint::{ConnectionError, VarInt},
-    EndpointId, Watcher,
-};
-use n0_future::StreamExt;
+use iroh::address_lookup::{DnsAddressLookup, MdnsAddressLookup, PkarrPublisher};
+use iroh::endpoint::{ConnectionError, VarInt};
+use iroh::Watcher;
 use safer_ffi::{prelude::*, slice, vec};
 use tokio::sync::RwLock;
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 
 use crate::addr::{EndpointAddr, SocketAddrV4, SocketAddrV6};
-use crate::key::{secret_key_generate, PublicKey, SecretKey};
+use crate::key::{secret_key_generate, SecretKey};
 use crate::stream::{RecvStream, SendStream};
 use crate::util::TOKIO_EXECUTOR;
 
@@ -254,29 +248,39 @@ pub fn endpoint_bind(
     );
 
     TOKIO_EXECUTOR.block_on(async move {
-        let mut builder = iroh::endpoint::Endpoint::builder()
+        let mut builder = iroh::Endpoint::builder()
             .relay_mode(config.relay_mode.into())
             .alpns(alpn_protocols)
             .secret_key(config.secret_key.deref().into());
 
-        let discovery =
-            make_discovery_config(config.secret_key.deref().into(), config.discovery_cfg);
-        if let Some(discovery) = discovery {
-            builder = builder.discovery(discovery);
-        }
+        // Add address lookup services based on config
+        builder = add_address_lookup(builder, config.discovery_cfg);
+
         if let Some(ref addr) = ipv4_addr {
             let addr: &SocketAddrV4 = addr;
-            builder = builder.bind_addr_v4(addr.into());
+            match builder.bind_addr(std::net::SocketAddr::V4(addr.into())) {
+                Ok(b) => builder = b,
+                Err(err) => {
+                    warn!("invalid ipv4 bind addr: {:?}", err);
+                    return EndpointResult::BindError;
+                }
+            }
         }
 
         if let Some(ref addr) = ipv6_addr {
             let addr: &SocketAddrV6 = addr;
-            builder = builder.bind_addr_v6(addr.into());
+            match builder.bind_addr(std::net::SocketAddr::V6(addr.into())) {
+                Ok(b) => builder = b,
+                Err(err) => {
+                    warn!("invalid ipv6 bind addr: {:?}", err);
+                    return EndpointResult::BindError;
+                }
+            }
         }
 
-        let builder = builder.bind().await;
+        let build_result = builder.bind().await;
 
-        match builder {
+        match build_result {
             Ok(ep) => {
                 out.ep.write().await.replace(ep);
                 EndpointResult::Ok
@@ -289,43 +293,28 @@ pub fn endpoint_bind(
     })
 }
 
-fn make_discovery_config(
-    secret_key: iroh::SecretKey,
+fn add_address_lookup(
+    mut builder: iroh::endpoint::Builder,
     discovery_config: DiscoveryConfig,
-) -> Option<iroh::discovery::ConcurrentDiscovery> {
-    let services = match discovery_config {
-        DiscoveryConfig::None => None,
-        DiscoveryConfig::DNS => Some(make_dns_discovery(&secret_key)),
-        DiscoveryConfig::Mdns => make_mdns_discovery(secret_key.public(), true).map(|s| vec![s]),
+) -> iroh::endpoint::Builder {
+    match discovery_config {
+        DiscoveryConfig::None => {}
+        DiscoveryConfig::DNS => {
+            builder = builder
+                .address_lookup(DnsAddressLookup::n0_dns())
+                .address_lookup(PkarrPublisher::n0_dns());
+        }
+        DiscoveryConfig::Mdns => {
+            builder = builder.address_lookup(MdnsAddressLookup::builder());
+        }
         DiscoveryConfig::All => {
-            let mut services = make_dns_discovery(&secret_key);
-            if let Some(service) = make_mdns_discovery(secret_key.public(), true) {
-                services.push(service);
-            }
-            Some(services)
+            builder = builder
+                .address_lookup(DnsAddressLookup::n0_dns())
+                .address_lookup(PkarrPublisher::n0_dns())
+                .address_lookup(MdnsAddressLookup::builder());
         }
     };
-    services.map(ConcurrentDiscovery::from_services)
-}
-
-fn make_dns_discovery(secret_key: &iroh::SecretKey) -> Vec<Box<dyn Discovery>> {
-    vec![
-        Box::new(DnsDiscovery::n0_dns().build()),
-        Box::new(PkarrPublisher::n0_dns().build(secret_key.clone())),
-    ]
-}
-
-fn make_mdns_discovery(endpoint_id: EndpointId, advertise: bool) -> Option<Box<dyn Discovery>> {
-    match MdnsDiscovery::builder()
-        .advertise(advertise)
-        .build(endpoint_id)
-    {
-        Err(e) => {
-            error!("unable to start MdnsDiscovery service: {e:?}");
-            None
-        }
-        Ok(service) => Some(Box::new(service)),
-    }
+    builder
 }
 
 /// Accepts a uni directional stream on this connection.
@@ -420,33 +409,45 @@ pub fn connection_free(conn: repr_c::Box<Connection>) {
     });
 }
 
-/// Estimated roundtrip time for the current connection in milli seconds.
+/// Estimated roundtrip time for the current connection's selected path in milli seconds.
+/// Returns 0 if no path is selected.
 #[ffi_export]
 pub fn connection_rtt(conn: &repr_c::Box<Connection>) -> u64 {
     TOKIO_EXECUTOR.block_on(async move {
-        conn.connection
-            .read()
-            .await
-            .as_ref()
-            .expect("connection not initialized")
-            .rtt()
-            .as_millis() as u64
+        let c = conn.connection.read().await;
+        let c = c.as_ref().expect("connection not initialized");
+        let paths = c.paths().get();
+        paths
+            .into_iter()
+            .find(|p| p.is_selected())
+            .map(|p| p.rtt().as_millis() as u64)
+            .unwrap_or(0)
     })
 }
 
-/// Returns the ratio of lost packets to sent packets.
+/// Returns the ratio of lost packets to sent packets on the selected path.
+/// Returns 0.0 if no path is selected or no packets have been sent.
 #[ffi_export]
 pub fn connection_packet_loss(conn: &repr_c::Box<Connection>) -> f64 {
-    let stats = TOKIO_EXECUTOR.block_on(async move {
-        conn.connection
-            .read()
-            .await
-            .as_ref()
-            .expect("connection not initialized")
-            .stats()
-    });
-    let path_stats = stats.path;
-    path_stats.lost_packets as f64 / path_stats.sent_packets as f64
+    TOKIO_EXECUTOR.block_on(async move {
+        let c = conn.connection.read().await;
+        let c = c.as_ref().expect("connection not initialized");
+        let paths = c.paths().get();
+        let path_info = paths.into_iter().find(|p| p.is_selected());
+
+        match path_info {
+            Some(info) => {
+                let stats = info.stats();
+                let sent = stats.udp_tx.datagrams;
+                if sent == 0 {
+                    0.0
+                } else {
+                    stats.lost_packets as f64 / sent as f64
+                }
+            }
+            None => 0.0,
+        }
+    })
 }
 
 /// Send a single datgram (unreliably).
@@ -740,78 +741,9 @@ pub enum ConnectionType {
     None,
 }
 
-impl From<iroh::endpoint::ConnectionType> for ConnectionType {
-    fn from(value: iroh::endpoint::ConnectionType) -> Self {
-        match value {
-            iroh::endpoint::ConnectionType::Direct(_) => ConnectionType::Direct,
-            iroh::endpoint::ConnectionType::Relay(_) => ConnectionType::Relay,
-            iroh::endpoint::ConnectionType::Mixed(_, _) => ConnectionType::Mixed,
-            iroh::endpoint::ConnectionType::None => ConnectionType::None,
-        }
-    }
-}
-
-/// Run a callback each time the [`ConnectionType`] to that peer has changed.
-///
-/// Does not block. This will run until the connection has closed.
-///
-/// `ctx` is passed along to the callback, to allow passing context, it must be thread safe as the callback is
-/// called from another thread.
-#[ffi_export]
-pub fn endpoint_conn_type_cb(
-    ep: repr_c::Box<Endpoint>,
-    ctx: *const c_void,
-    endpoint_id: &PublicKey,
-    cb: unsafe extern "C" fn(ctx: *const c_void, err: EndpointResult, conn_type: ConnectionType),
-) {
-    // hack around the fact that `*const c_void` is not Send
-    struct CtxPtr(*const c_void);
-    unsafe impl Send for CtxPtr {}
-    let ctx_ptr = CtxPtr(ctx);
-
-    let endpoint_id: EndpointId = endpoint_id.into();
-
-    TOKIO_EXECUTOR.spawn(async move {
-        // make the compiler happy
-        let _ = &ctx_ptr;
-
-        let conn_type = match ep
-            .ep
-            .read()
-            .await
-            .as_ref()
-            .expect("endpoint not initalized")
-            .conn_type(endpoint_id)
-        {
-            None => {
-                unsafe {
-                    cb(
-                        ctx_ptr.0,
-                        EndpointResult::ConnectionTypeError,
-                        ConnectionType::None,
-                    );
-                }
-                return;
-            }
-            Some(conn_type) => conn_type,
-        };
-
-        let mut stream = conn_type.stream();
-        while let Some(conn_type) = stream.next().await {
-            unsafe {
-                cb(ctx_ptr.0, EndpointResult::Ok, conn_type.into());
-            }
-        }
-
-        unsafe {
-            cb(
-                ctx_ptr.0,
-                EndpointResult::ConnectError,
-                ConnectionType::None,
-            );
-        }
-    });
-}
+// NOTE: endpoint_conn_type_cb was removed in iroh 0.96 as the Endpoint::conn_type method
+// was removed. The ConnectionType enum is kept for backwards compatibility but the
+// callback function is no longer available.
 
 /// Establish a uni directional connection.
 ///
@@ -1569,152 +1501,6 @@ mod tests {
         client_thread.join().unwrap();
     }
 
-    type CallbackRes = (EndpointResult, ConnectionType);
-
-    unsafe extern "C" fn conn_type_callback(
-        ctx: *const c_void,
-        res: EndpointResult,
-        conn_type: ConnectionType,
-    ) {
-        // unsafe b/c dereferencing a raw pointer
-        let sender: &tokio::sync::mpsc::Sender<CallbackRes> =
-            unsafe { &(*(ctx as *const tokio::sync::mpsc::Sender<CallbackRes>)) };
-        sender
-            .try_send((res, conn_type))
-            .expect("receiver dropped or channel full");
-    }
-
-    #[test]
-    fn test_conn_type_cb() {
-        let alpn: vec::Vec<u8> = b"/cool/alpn/1".to_vec().into();
-
-        // create config
-        let mut config_server = endpoint_config_default();
-        endpoint_config_add_alpn(&mut config_server, alpn.as_ref());
-
-        let mut config_client = endpoint_config_default();
-        endpoint_config_add_alpn(&mut config_client, alpn.as_ref());
-
-        let (s, r) = std::sync::mpsc::channel();
-        let (client_s, client_r) = std::sync::mpsc::channel();
-
-        // setup server
-        let alpn_s = alpn.clone();
-        let server_thread = std::thread::spawn(move || {
-            // create magic endpoint and bind
-            let ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_server, None, None, &ep);
-            assert_eq!(bind_res, EndpointResult::Ok);
-
-            let mut addr = endpoint_addr_default();
-            let res = endpoint_addr(&ep, &mut addr);
-            assert_eq!(res, EndpointResult::Ok);
-
-            s.send(addr).unwrap();
-
-            let ep = Arc::new(ep);
-            let alpn_s = alpn_s.clone();
-
-            // accept connection
-            println!("[s] accepting conn");
-            let conn = connection_default();
-            let mut alpn = vec::Vec::EMPTY;
-            let res = endpoint_accept_any(&ep, &mut alpn, &conn);
-            assert_eq!(res, EndpointResult::Ok);
-
-            if alpn.as_ref() != alpn_s.as_ref() {
-                panic!("unexpectd alpn: {alpn:?}");
-            };
-
-            let mut send_stream = send_stream_default();
-            let mut recv_stream = recv_stream_default();
-            let accept_res = connection_accept_bi(&conn, &mut send_stream, &mut recv_stream);
-            assert_eq!(accept_res, EndpointResult::Ok);
-
-            println!("[s] reading");
-
-            let mut recv_buffer = vec![0u8; 1024];
-            let read_res = recv_stream_read(&mut recv_stream, (&mut recv_buffer[..]).into());
-            assert!(read_res > 0);
-            assert_eq!(
-                std::str::from_utf8(&recv_buffer[..read_res as usize]).unwrap(),
-                "hello world",
-            );
-
-            println!("[s] sending");
-            let send_res = send_stream_write(&mut send_stream, "hello client".as_bytes().into());
-            assert_eq!(send_res, EndpointResult::Ok);
-
-            let res = send_stream_finish(send_stream);
-            assert_eq!(res, EndpointResult::Ok);
-            client_r.recv().unwrap();
-        });
-
-        let (callback_s, mut callback_r): (
-            tokio::sync::mpsc::Sender<CallbackRes>,
-            tokio::sync::mpsc::Receiver<CallbackRes>,
-        ) = tokio::sync::mpsc::channel(10);
-
-        // setup client
-        let client_thread = std::thread::spawn(move || {
-            // create magic endpoint and bind
-            let ep = endpoint_default();
-            let bind_res = endpoint_bind(&config_client, None, None, &ep);
-            assert_eq!(bind_res, EndpointResult::Ok);
-
-            // wait for addr from server
-            let addr = r.recv().unwrap();
-
-            let alpn = alpn.clone();
-
-            // wait for a moment to make sure the server is ready
-            std::thread::sleep(std::time::Duration::from_millis(100));
-
-            println!("[c] dialing");
-            // connect to server
-            let conn = connection_default();
-            let connect_res = endpoint_connect(&ep, alpn.as_ref(), addr.clone(), &conn);
-            assert_eq!(connect_res, EndpointResult::Ok);
-
-            let mut send_stream = send_stream_default();
-            let mut recv_stream = recv_stream_default();
-            let open_res = connection_open_bi(&conn, &mut send_stream, &mut recv_stream);
-            assert_eq!(open_res, EndpointResult::Ok);
-
-            let s_ptr: *const c_void = &callback_s as *const _ as *const c_void;
-            endpoint_conn_type_cb(ep, s_ptr, &addr.id, conn_type_callback);
-
-            println!("[c] sending");
-            let send_res = send_stream_write(&mut send_stream, "hello world".as_bytes().into());
-            assert_eq!(send_res, EndpointResult::Ok);
-
-            println!("[c] reading");
-
-            let mut recv_buffer = vec![0u8; 1024];
-            let read_res = recv_stream_read(&mut recv_stream, (&mut recv_buffer[..]).into());
-            assert!(read_res > 0);
-            assert_eq!(
-                std::str::from_utf8(&recv_buffer[..read_res as usize]).unwrap(),
-                "hello client"
-            );
-
-            let finish_res = send_stream_finish(send_stream);
-            assert_eq!(finish_res, EndpointResult::Ok);
-            client_s.send(()).unwrap();
-        });
-
-        server_thread.join().unwrap();
-        client_thread.join().unwrap();
-        let mut got_any_res = false;
-        while let Some((res, conn_type)) = callback_r.blocking_recv() {
-            got_any_res = true;
-            if !matches!(res, EndpointResult::Ok) {
-                panic!("got error in conn type callback: {res:?}");
-            }
-            println!("got conn type {conn_type:?}");
-        }
-        if !got_any_res {
-            panic!("got no messages from the callback");
-        }
-    }
+    // NOTE: test_conn_type_cb was removed in iroh 0.96 as the Endpoint::conn_type method
+    // was removed.
 }
