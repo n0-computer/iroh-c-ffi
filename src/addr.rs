@@ -27,10 +27,10 @@ impl PartialEq for EndpointAddr {
 
 impl From<EndpointAddr> for iroh::EndpointAddr {
     fn from(addr: EndpointAddr) -> Self {
-        let ip_addrs = addr.ip_addrs.into_iter().map(|a| TransportAddr::Ip(a.addr));
+        let ip_addrs = addr.ip_addrs.iter().map(|a| TransportAddr::Ip(a.addr));
         let relay_urls = addr
             .relay_urls
-            .into_iter()
+            .iter()
             .filter_map(|url| url.url.clone().map(TransportAddr::Relay));
 
         iroh::EndpointAddr::from_parts(addr.id.into(), relay_urls.chain(ip_addrs))
