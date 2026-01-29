@@ -184,6 +184,11 @@ jobs:
                 $tmp | Expand-Archive -DestinationPath $outputDir -Force
                 $tmp | Remove-Item
             - uses: msys2/setup-msys2@v2
+              with:
+                msystem: MINGW64
+                update: true
+                install: mingw-w64-x86_64-toolchain
+                path-type: inherit
             - name: run tests
               run: |
                 cargo nextest run --all-features --lib --bins --tests --no-fail-fast
