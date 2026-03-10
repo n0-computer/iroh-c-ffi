@@ -35,3 +35,7 @@ data-encoding = "2.9.0"
 [features]
 # generate headers
 headers = ["safer-ffi/headers"]
+
+[patch.crates-io]
+iroh = { git = "https://github.com/n0-computer/iroh.git", branch = "main" }
+iroh-tickets = { git = "https://github.com/n0-computer/iroh-tickets.git", branch = "iroh-X" }
