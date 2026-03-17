@@ -8,17 +8,15 @@
 #include "irohnet.h"
 
 int run_client(EndpointConfig_t *config, slice_ref_uint8_t alpn_slice,
-               char const *node_id_raw, char const *relay_url_raw,
-               char const **addrs_raw, int addrs_len) {
+               char const *endpoint_addr_raw) {
   printf("Starting client...\n");
 
-  // create node addr
-  NodeAddr_t node_addr = node_addr_default();
+  // create endpoint addr
+  EndpointAddr_t addr = endpoint_addr_default();
 
-  // char *nodeAddrToUse = node_id;
-  int err = node_addr_from_string(strdup(node_id_raw), &node_addr);
+  int err = endpoint_addr_from_string(endpoint_addr_raw, &addr);
   if (err != 0) {
-    fprintf(stderr, "invalid node_addr '%s'\n", node_id_raw);
+    fprintf(stderr, "invalid endpoint addr '%s'\n", endpoint_addr_raw);
     return -1;
   }
 
@@ -33,7 +31,7 @@ int run_client(EndpointConfig_t *config, slice_ref_uint8_t alpn_slice,
   // connect
   printf("connecting to %s\n", alpn_slice.ptr);
   Connection_t *conn = connection_default();
-  int ret = endpoint_connect(&ep, alpn_slice, node_addr, &conn);
+  int ret = endpoint_connect(&ep, alpn_slice, addr, &conn);
   if (ret != 0) {
     printf("failed to connect to server\n");
     return -1;
@@ -76,6 +74,7 @@ int run_client(EndpointConfig_t *config, slice_ref_uint8_t alpn_slice,
 
   recv_stream_free(recv_stream);
   connection_free(conn);
+  endpoint_close(ep);
 
   return 0;
 }
@@ -84,18 +83,14 @@ typedef struct {
   EndpointConfig_t *config;
   slice_ref_uint8_t alpn_slice;
   Endpoint_t *ep;
-  bool json_output;     // For server
-  const char *node_id;  // For client
-  const char *relay_url; // For client
-  const char **addrs;   // For client
-  int addrs_len;        // For client
+  bool json_output;          // For server
+  const char *endpoint_addr; // For client
 } ThreadParam;
 
 // Wrapper function for the client
 void *client_thread_func(void *arg) {
   ThreadParam *params = (ThreadParam *)arg;
-  run_client(params->config, params->alpn_slice, params->node_id,
-             params->relay_url, params->addrs, params->addrs_len);
+  run_client(params->config, params->alpn_slice, params->endpoint_addr);
   pthread_exit(NULL);
 }
 
@@ -127,15 +122,15 @@ int main(int argc, char const *const argv[]) {
   endpoint_config_add_alpn(&config2, client_params[1].alpn_slice);
   client_params[1].config = &config2;
 
-  if (argc < 1) {
+  if (argc < 2) {
     fprintf(stderr,
-            "client must be supplied <node id> <relay-url> <addr1> .. <addrn>");
+            "client must be supplied <endpoint_addr_string>");
     return -1;
   }
-  char const *nodeAddressStr = argv[1];
+  char const *endpointAddrStr = argv[1];
 
-  client_params[0].node_id = strdup(nodeAddressStr);
-  client_params[1].node_id = strdup(nodeAddressStr);
+  client_params[0].endpoint_addr = strdup(endpointAddrStr);
+  client_params[1].endpoint_addr = strdup(endpointAddrStr);
   pthread_create(&client_threads[0], NULL, client_thread_func,
                  (void *)&client_params[0]);
   pthread_create(&client_threads[1], NULL, client_thread_func,

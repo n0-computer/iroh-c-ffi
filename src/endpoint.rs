@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use anyhow::Context;
 use iroh::address_lookup::{DnsAddressLookup, MdnsAddressLookup, PkarrPublisher};
-use iroh::endpoint::{ConnectionError, VarInt};
+use iroh::endpoint::{presets, ConnectionError, VarInt};
 use iroh::Watcher;
 use safer_ffi::{prelude::*, slice, vec};
 use tokio::sync::RwLock;
@@ -248,7 +248,7 @@ pub fn endpoint_bind(
     );
 
     TOKIO_EXECUTOR.block_on(async move {
-        let mut builder = iroh::Endpoint::builder()
+        let mut builder = iroh::Endpoint::builder(presets::N0)
             .relay_mode(config.relay_mode.into())
             .alpns(alpn_protocols)
             .secret_key(config.secret_key.deref().into());
@@ -420,7 +420,8 @@ pub fn connection_rtt(conn: &repr_c::Box<Connection>) -> u64 {
         paths
             .into_iter()
             .find(|p| p.is_selected())
-            .map(|p| p.rtt().as_millis() as u64)
+            .and_then(|p| p.rtt())
+            .map(|rtt| rtt.as_millis() as u64)
             .unwrap_or(0)
     })
 }
@@ -435,9 +436,8 @@ pub fn connection_packet_loss(conn: &repr_c::Box<Connection>) -> f64 {
         let paths = c.paths().get();
         let path_info = paths.into_iter().find(|p| p.is_selected());
 
-        match path_info {
-            Some(info) => {
-                let stats = info.stats();
+        match path_info.and_then(|p| p.stats()) {
+            Some(stats) => {
                 let sent = stats.udp_tx.datagrams;
                 if sent == 0 {
                     0.0
@@ -1041,6 +1041,7 @@ mod tests {
             );
             println!("[s] closing connection");
             connection_close(conn);
+            endpoint_close(ep);
         });
 
         // setup client
@@ -1073,6 +1074,7 @@ mod tests {
             let closed_res = connection_closed(conn);
             println!("[c] closed");
             assert_eq!(closed_res, EndpointResult::Ok);
+            endpoint_close(ep);
         });
 
         server_thread.join().unwrap();
@@ -1126,6 +1128,7 @@ mod tests {
             let closed_res = connection_closed(conn);
             assert_eq!(closed_res, EndpointResult::Ok);
             println!("[s] closed");
+            endpoint_close(ep);
         });
 
         // setup client
@@ -1159,6 +1162,7 @@ mod tests {
             );
             println!("[c] closing connection");
             connection_close(conn);
+            endpoint_close(ep);
         });
 
         server_thread.join().unwrap();
