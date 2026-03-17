@@ -1600,8 +1600,9 @@ dependencies = [
 
 [[package]]
 name = "iroh-tickets"
-version = "0.3.0"
-source = "git+https://github.com/n0-computer/iroh-tickets.git?branch=iroh-X#93927033dccd9ae6b0d7e4386b01428ac621aa94"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ab64bac4bb573b9cfd2142bd2876ed65ca792efbc4398361a4ee51a0f9afbed6"
 dependencies = [
  "data-encoding",
  "derive_more",

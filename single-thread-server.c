@@ -40,23 +40,28 @@ int main(int argc, char const *const argv[]) {
   }
 
   // Print details
-  NodeAddr_t node_addr = node_addr_default();
-  int addr_res = endpoint_node_addr(&ep, &node_addr);
+  EndpointAddr_t addr = endpoint_addr_default();
+  int addr_res = endpoint_addr(&ep, &addr);
   if (addr_res != 0) {
-    fprintf(stderr, "faile to get my address");
+    fprintf(stderr, "failed to get my address");
     return -1;
   }
-  char *node_id_str = public_key_as_base32(&node_addr.node_id);
-  char *relay_url_str = url_as_str(node_addr.relay_url);
+  char *endpoint_id_str = public_key_as_base32(&addr.id);
 
-  printf("Listening on:\nNode Id: %s\nRelay: %s\nAddrs:\n", node_id_str,
-         relay_url_str);
-  printf("Node Address is \n%s\n", node_addr_as_str(&node_addr));
+  Url_t * const * relay_url = endpoint_addr_relay_urls_nth(&addr, 0);
+  char *relay_url_str = NULL;
+  if (relay_url != NULL) {
+    relay_url_str = url_as_str(*relay_url);
+  }
+
+  printf("Listening on:\nEndpoint Id: %s\nRelay: %s\nAddrs:\n", endpoint_id_str,
+         relay_url_str ? relay_url_str : "(none)");
+  printf("Endpoint Address is \n%s\n", endpoint_addr_as_str(&addr));
 
   // iterate over the direct addresses
-  for (int i = 0; i < node_addr.direct_addresses.len; i++) {
-    SocketAddr_t const *addr = node_addr_direct_addresses_nth(&node_addr, i);
-    char *socket_str = socket_addr_as_str(addr);
+  for (int i = 0; i < addr.ip_addrs.len; i++) {
+    SocketAddr_t const *socket_addr = endpoint_addr_ip_addrs_nth(&addr, i);
+    char *socket_str = socket_addr_as_str(socket_addr);
     printf("  - %s\n", socket_str);
     rust_free_string(socket_str);
   }
@@ -66,7 +71,6 @@ int main(int argc, char const *const argv[]) {
   conn2 = connection_default();
   while (accepted < 2) {
     Vec_uint8_t alpn_slice_out = rust_buffer_alloc(0);
-    // int res = endpoint_accept(&ep, alpn_slice_control, &conn);
 
     int res;
     if (accepted == 0)
@@ -144,5 +148,13 @@ int main(int argc, char const *const argv[]) {
   send_stream_finish(send_stream2);
   recv_stream_free(recv_stream2);
   rust_buffer_free(recvBuffer);
+
+  if (relay_url_str != NULL) {
+    rust_free_string(relay_url_str);
+  }
+  rust_free_string(endpoint_id_str);
+  endpoint_addr_free(addr);
+  endpoint_close(ep);
+
   return 0;
 }

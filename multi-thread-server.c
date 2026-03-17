@@ -133,7 +133,6 @@ int run_server(Endpoint_t *ep, slice_ref_uint8_t alpn_slice, bool json_output)
     free(recv_buffer);
     recv_stream_free(recv_stream);
     connection_free(conn);
-    endpoint_free(ep);
 
     return 0;
 }
@@ -144,11 +143,7 @@ typedef struct
     EndpointConfig_t *config;
     slice_ref_uint8_t alpn_slice;
     Endpoint_t *ep;
-    bool json_output;     // For server
-    const char *node_id;  // For client
-    const char *relay_url; // For client
-    const char **addrs;   // For client
-    int addrs_len;        // For client
+    bool json_output;
 } ThreadParam;
 
 // Wrapper function for the server
@@ -164,20 +159,16 @@ int main(int argc, char const *const argv[])
     iroh_enable_tracing();
 
     pthread_t server_threads[2];
-    // pthread_t client_threads[2];
     ThreadParam server_params[2];
-    // ThreadParam client_params[2];
 
     // Initialize parameters for each thread, including different ALPNs
     char alpn1[] = "/cool/alpn/1";
     char alpn2[] = "/cool/alpn/2";
 
-    // Assuming server and client specific parameters are initialized here...
-
     // Server thread 1
     server_params[0].alpn_slice.ptr = (uint8_t *)&alpn1[0];
     server_params[0].alpn_slice.len = strlen(alpn1);
-    server_params[0].json_output = false; // Or true, based on your requirement
+    server_params[0].json_output = false;
     EndpointConfig_t config = endpoint_config_default();
     endpoint_config_add_alpn(&config, server_params[0].alpn_slice);
     server_params[0].config = &config;
@@ -185,7 +176,7 @@ int main(int argc, char const *const argv[])
     // Server thread 2 with different ALPN
     server_params[1].alpn_slice.ptr = (uint8_t *)&alpn2[0];
     server_params[1].alpn_slice.len = strlen(alpn2);
-    server_params[1].json_output = false; // Or true
+    server_params[1].json_output = false;
     endpoint_config_add_alpn(&config, server_params[1].alpn_slice);
     server_params[1].config = &config;
 
@@ -198,30 +189,28 @@ int main(int argc, char const *const argv[])
     }
 
     // Print details
-    NodeAddr_t node_addr = node_addr_default();
-    int addr_res = endpoint_node_addr(&ep, &node_addr);
+    EndpointAddr_t addr = endpoint_addr_default();
+    int addr_res = endpoint_addr(&ep, &addr);
     if (addr_res != 0)
     {
-        fprintf(stderr, "faile to get my address");
+        fprintf(stderr, "failed to get my address");
         return -1;
     }
-    char *node_id_str = public_key_as_base32(&node_addr.node_id);
-    
-    Url_t * relay_url = url_default();
-    int relay_url_res = endpoint_home_relay(&ep, relay_url);
-    if (relay_url_res != 0) {
-        fprintf(stderr, "failed to get my home relay");
-        return -1;
-    }
-    char * relay_url_str = url_as_str(relay_url);
+    char *endpoint_id_str = public_key_as_base32(&addr.id);
 
-    printf("Listening on:\nNode Id: %s\nRelay: %s\nAddrs:\n", node_id_str, relay_url_str);
+    Url_t * const * relay_url = endpoint_addr_relay_urls_nth(&addr, 0);
+    char *relay_url_str = NULL;
+    if (relay_url != NULL) {
+        relay_url_str = url_as_str(*relay_url);
+    }
+
+    printf("Listening on:\nEndpoint Id: %s\nRelay: %s\nAddrs:\n", endpoint_id_str, relay_url_str ? relay_url_str : "(none)");
 
     // iterate over the direct addresses
-    for (int i = 0; i < node_addr.direct_addresses.len; i++)
+    for (int i = 0; i < addr.ip_addrs.len; i++)
     {
-        SocketAddr_t const *addr = node_addr_direct_addresses_nth(&node_addr, i);
-        char *socket_str = socket_addr_as_str(addr);
+        SocketAddr_t const *socket_addr = endpoint_addr_ip_addrs_nth(&addr, i);
+        char *socket_str = socket_addr_as_str(socket_addr);
         printf("  - %s\n", socket_str);
         rust_free_string(socket_str);
     }
@@ -234,22 +223,16 @@ int main(int argc, char const *const argv[])
     pthread_create(&server_threads[0], NULL, server_thread_func, (void *)&server_params[0]);
     //pthread_create(&server_threads[1], NULL, server_thread_func, (void *)&server_params[1]);
 
-    // Client threads would be similar, using client_thread_func and client_params
-    // Initialize client_params with necessary parameters
-    // pthread_create(&client_threads[0], NULL, client_thread_func, (void *)&client_params[0]);
-    // pthread_create(&client_threads[1], NULL, client_thread_func, (void *)&client_params[1]);
-
     // Wait for server threads to complete
     pthread_join(server_threads[0], NULL);
     pthread_join(server_threads[1], NULL);
 
-    rust_free_string(relay_url_str);
-    rust_free_string(node_id_str);
-    node_addr_free(node_addr);
-
-    // Wait for client threads to complete
-    // pthread_join(client_threads[0], NULL);
-    // pthread_join(client_threads[1], NULL);
+    if (relay_url_str != NULL) {
+        rust_free_string(relay_url_str);
+    }
+    rust_free_string(endpoint_id_str);
+    endpoint_addr_free(addr);
+    endpoint_close(ep);
 
     return 0;
 }

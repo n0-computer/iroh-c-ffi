@@ -263,8 +263,8 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
   rust_free_string(relay_url_str);
   rust_free_string(endpoint_id_str);
   endpoint_addr_free(addr);
-  endpoint_free(ep);
-  printf("endpoint freed\n");
+  endpoint_close(ep);
+  printf("endpoint closed\n");
   return 0;
 }
 

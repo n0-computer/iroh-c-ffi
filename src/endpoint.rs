@@ -1041,6 +1041,7 @@ mod tests {
             );
             println!("[s] closing connection");
             connection_close(conn);
+            endpoint_close(ep);
         });
 
         // setup client
@@ -1073,6 +1074,7 @@ mod tests {
             let closed_res = connection_closed(conn);
             println!("[c] closed");
             assert_eq!(closed_res, EndpointResult::Ok);
+            endpoint_close(ep);
         });
 
         server_thread.join().unwrap();
@@ -1126,6 +1128,7 @@ mod tests {
             let closed_res = connection_closed(conn);
             assert_eq!(closed_res, EndpointResult::Ok);
             println!("[s] closed");
+            endpoint_close(ep);
         });
 
         // setup client
@@ -1159,6 +1162,7 @@ mod tests {
             );
             println!("[c] closing connection");
             connection_close(conn);
+            endpoint_close(ep);
         });
 
         server_thread.join().unwrap();
