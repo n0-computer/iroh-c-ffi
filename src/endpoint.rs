@@ -3,9 +3,9 @@ use std::ops::Deref;
 use std::time::Duration;
 
 use anyhow::Context;
-use iroh::address_lookup::{DnsAddressLookup, MdnsAddressLookup, PkarrPublisher};
+use iroh::address_lookup::{DnsAddressLookup, PkarrPublisher};
 use iroh::endpoint::{presets, ConnectionError, VarInt};
-use iroh::Watcher;
+use iroh_mdns_address_lookup::MdnsAddressLookup;
 use safer_ffi::{prelude::*, slice, vec};
 use tokio::sync::RwLock;
 use tracing::{debug, warn};
@@ -416,12 +416,11 @@ pub fn connection_rtt(conn: &repr_c::Box<Connection>) -> u64 {
     TOKIO_EXECUTOR.block_on(async move {
         let c = conn.connection.read().await;
         let c = c.as_ref().expect("connection not initialized");
-        let paths = c.paths().get();
+        let paths = c.paths();
         paths
             .into_iter()
             .find(|p| p.is_selected())
-            .and_then(|p| p.rtt())
-            .map(|rtt| rtt.as_millis() as u64)
+            .map(|p| p.rtt().as_millis() as u64)
             .unwrap_or(0)
     })
 }
@@ -433,10 +432,10 @@ pub fn connection_packet_loss(conn: &repr_c::Box<Connection>) -> f64 {
     TOKIO_EXECUTOR.block_on(async move {
         let c = conn.connection.read().await;
         let c = c.as_ref().expect("connection not initialized");
-        let paths = c.paths().get();
+        let paths = c.paths();
         let path_info = paths.into_iter().find(|p| p.is_selected());
 
-        match path_info.and_then(|p| p.stats()) {
+        match path_info.map(|p| p.stats()) {
             Some(stats) => {
                 let sent = stats.udp_tx.datagrams;
                 if sent == 0 {
