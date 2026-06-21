@@ -5,6 +5,10 @@ use tracing_subscriber::{prelude::*, EnvFilter};
 pub(crate) static TOKIO_EXECUTOR: Lazy<tokio::runtime::Runtime> =
     Lazy::new(|| tokio::runtime::Runtime::new().unwrap());
 
+pub fn tokio_executor<F: std::future::Future>(future: F) -> F::Output {
+    TOKIO_EXECUTOR.block_on(future)
+}
+
 /// Frees a Rust-allocated string.
 #[ffi_export]
 pub fn rust_free_string(string: char_p::Box) {
