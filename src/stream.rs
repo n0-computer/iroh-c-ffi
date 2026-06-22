@@ -3,7 +3,7 @@ use std::time::Duration;
 use safer_ffi::{prelude::*, slice, vec};
 
 use crate::endpoint::EndpointResult;
-use crate::util::TOKIO_EXECUTOR;
+use crate::util::tokio_executor;
 
 /// A stream that can only be used to receive data.
 #[derive_ReprC]
@@ -45,24 +45,23 @@ pub fn recv_stream_id(stream: &repr_c::Box<RecvStream>) -> u64 {
 /// Blocks the current thread.
 ///
 /// Returns how many bytes were read. Returns `-1` if an error occured.
-#[ffi_export]
-pub fn recv_stream_read(
+#[ffi_export(executor=tokio_executor)]
+pub async fn recv_stream_read(
     stream: &mut repr_c::Box<RecvStream>,
     mut data: slice::slice_mut<'_, u8>,
 ) -> i64 {
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        stream
+    ffi_await!(async move {
+        let res = stream
             .stream
             .as_mut()
             .expect("sendstream not initialized")
             .read(&mut data)
-            .await
-    });
-
-    match res {
-        Ok(read) => read.unwrap_or(0) as i64,
-        Err(_err) => -1,
-    }
+            .await;
+        match res {
+            Ok(read) => read.unwrap_or(0) as i64,
+            Err(_err) => -1,
+        }
+    })
 }
 
 /// Receive data on this stream and return with an error if reading exceeds the
@@ -71,8 +70,8 @@ pub fn recv_stream_read(
 /// Blocks the current thread.
 ///
 /// On success, returns how many bytes were read in the `bytes_read` parameter.
-#[ffi_export]
-pub fn recv_stream_read_timeout(
+#[ffi_export(executor=tokio_executor)]
+pub async fn recv_stream_read_timeout(
     stream: &mut repr_c::Box<RecvStream>,
     mut data: slice::slice_mut<'_, u8>,
     // bytes_read: &mut u64,
@@ -81,8 +80,8 @@ pub fn recv_stream_read_timeout(
 ) -> i64 {
     let timeout = Duration::from_millis(timeout_ms);
 
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        tokio::time::timeout(timeout, async move {
+    ffi_await!(async move {
+        let res = tokio::time::timeout(timeout, async move {
             stream
                 .stream
                 .as_mut()
@@ -90,24 +89,24 @@ pub fn recv_stream_read_timeout(
                 .read(&mut data)
                 .await
         })
-        .await
-    });
+        .await;
 
-    match res {
-        Ok(Ok(read)) => {
-            read.unwrap_or(0) as i64
-            // *bytes_read = read.unwrap_or(0) as i64
-            // EndpointResult::Ok
+        match res {
+            Ok(Ok(read)) => {
+                read.unwrap_or(0) as i64
+                // *bytes_read = read.unwrap_or(0) as i64
+                // EndpointResult::Ok
+            }
+            Ok(Err(_err)) => {
+                // EndpointResult::ReadError,
+                -1
+            }
+            Err(_err) => {
+                // EndpointResult::Timeout,
+                -2
+            }
         }
-        Ok(Err(_err)) => {
-            // EndpointResult::ReadError,
-            -1
-        }
-        Err(_err) => {
-            // EndpointResult::Timeout,
-            -2
-        }
-    }
+    })
 }
 
 /// Receive data on this stream.
@@ -116,16 +115,16 @@ pub fn recv_stream_read_timeout(
 ///
 /// Blocks the current thread, until either the full stream has been read, or
 /// the timeout has expired.
-#[ffi_export]
-pub fn recv_stream_read_to_end_timeout(
+#[ffi_export(executor=tokio_executor)]
+pub async fn recv_stream_read_to_end_timeout(
     stream: &mut repr_c::Box<RecvStream>,
     data: &mut vec::Vec<u8>,
     size_limit: usize,
     timeout_ms: u64,
 ) -> EndpointResult {
     let timeout = Duration::from_millis(timeout_ms);
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        tokio::time::timeout(timeout, async move {
+    ffi_await!(async move {
+        let res = tokio::time::timeout(timeout, async move {
             stream
                 .stream
                 .as_mut()
@@ -133,19 +132,19 @@ pub fn recv_stream_read_to_end_timeout(
                 .read_to_end(size_limit)
                 .await
         })
-        .await
-    });
+        .await;
 
-    match res {
-        Ok(Ok(read)) => {
-            data.with_rust_mut(|v| {
-                *v = read;
-            });
-            EndpointResult::Ok
+        match res {
+            Ok(Ok(read)) => {
+                data.with_rust_mut(|v| {
+                    *v = read;
+                });
+                EndpointResult::Ok
+            }
+            Ok(Err(_err)) => EndpointResult::ReadError,
+            Err(_err) => EndpointResult::Timeout,
         }
-        Ok(Err(_err)) => EndpointResult::ReadError,
-        Err(_err) => EndpointResult::Timeout,
-    }
+    })
 }
 
 /// A stream that can only be used to send data
@@ -184,39 +183,39 @@ pub fn send_stream_id(stream: &repr_c::Box<SendStream>) -> u64 {
 /// Send data on the stream.
 ///
 /// Blocks the current thread.
-#[ffi_export]
-pub fn send_stream_write(
+#[ffi_export(executor=tokio_executor)]
+pub async fn send_stream_write(
     stream: &mut repr_c::Box<SendStream>,
     data: slice::slice_ref<'_, u8>,
 ) -> EndpointResult {
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        stream
+    ffi_await!(async move {
+        let res = stream
             .stream
             .as_mut()
             .expect("sendstream not initialized")
             .write_all(&data)
-            .await
-    });
+            .await;
 
-    match res {
-        Ok(()) => EndpointResult::Ok,
-        Err(_err) => EndpointResult::SendError,
-    }
+        match res {
+            Ok(()) => EndpointResult::Ok,
+            Err(_err) => EndpointResult::SendError,
+        }
+    })
 }
 
 /// Send data on the stream, returning an error if the data was not written
 /// before the given timeout.
 ///
 /// Blocks the current thread.
-#[ffi_export]
-pub fn send_stream_write_timeout(
+#[ffi_export(executor=tokio_executor)]
+pub async fn send_stream_write_timeout(
     stream: &mut repr_c::Box<SendStream>,
     data: slice::slice_ref<'_, u8>,
     timeout_ms: u64,
 ) -> EndpointResult {
     let timeout = Duration::from_millis(timeout_ms);
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        tokio::time::timeout(timeout, async move {
+    ffi_await!(async move {
+        let res = tokio::time::timeout(timeout, async move {
             stream
                 .stream
                 .as_mut()
@@ -224,14 +223,14 @@ pub fn send_stream_write_timeout(
                 .write_all(&data)
                 .await
         })
-        .await
-    });
+        .await;
 
-    match res {
-        Ok(Ok(())) => EndpointResult::Ok,
-        Ok(Err(_err)) => EndpointResult::SendError,
-        Err(_err) => EndpointResult::Timeout,
-    }
+        match res {
+            Ok(Ok(())) => EndpointResult::Ok,
+            Ok(Err(_err)) => EndpointResult::SendError,
+            Err(_err) => EndpointResult::Timeout,
+        }
+    })
 }
 
 /// Finish the sending on this stream.

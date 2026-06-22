@@ -13,7 +13,8 @@ use tracing::{debug, warn};
 use crate::addr::{EndpointAddr, SocketAddrV4, SocketAddrV6};
 use crate::key::{secret_key_generate, SecretKey};
 use crate::stream::{RecvStream, SendStream};
-use crate::util::TOKIO_EXECUTOR;
+
+use crate::util::{tokio_executor, TOKIO_EXECUTOR};
 
 const CLOSE_CODE: VarInt = VarInt::from_u32(0);
 
@@ -113,20 +114,20 @@ pub fn endpoint_default() -> repr_c::Box<Endpoint> {
 }
 
 /// Frees the iroh endpoint.
-#[ffi_export]
-pub fn endpoint_free(ep: repr_c::Box<Endpoint>) {
-    TOKIO_EXECUTOR.block_on(async move {
+#[ffi_export(executor=tokio_executor)]
+pub async fn endpoint_free(ep: repr_c::Box<Endpoint>) {
+    ffi_await!(async move {
         let _ = ep.ep.write().await.take();
-    });
+    })
 }
 
 /// Let the endpoint know that the underlying network conditions might have changed.
 ///
 /// This really only needs to be called on android,
 /// Ref https://developer.android.com/training/monitoring-device-state/connectivity-status-type
-#[ffi_export]
-pub fn endpoint_network_change(ep: &repr_c::Box<Endpoint>) {
-    TOKIO_EXECUTOR.block_on(async move {
+#[ffi_export(executor=tokio_executor)]
+pub async fn endpoint_network_change(ep: &repr_c::Box<Endpoint>) {
+    ffi_await!(async move {
         ep.ep
             .read()
             .await
@@ -134,7 +135,7 @@ pub fn endpoint_network_change(ep: &repr_c::Box<Endpoint>) {
             .expect("endpoint not initialized")
             .network_change()
             .await;
-    });
+    })
 }
 
 /// An endpoint that leverages a quic endpoint, backed by a iroh socket.
@@ -227,8 +228,8 @@ pub enum EndpointResult {
 /// If the selected port is already in use, a random port will be used.
 ///
 /// Blocks the current thread.
-#[ffi_export]
-pub fn endpoint_bind(
+#[ffi_export(executor=tokio_executor)]
+pub async fn endpoint_bind(
     config: &EndpointConfig,
     ipv4_addr: Option<repr_c::Box<SocketAddrV4>>,
     ipv6_addr: Option<repr_c::Box<SocketAddrV6>>,
@@ -247,7 +248,7 @@ pub fn endpoint_bind(
             .collect::<Vec<_>>()
     );
 
-    TOKIO_EXECUTOR.block_on(async move {
+    ffi_await!(async move {
         let mut builder = iroh::Endpoint::builder(presets::N0)
             .relay_mode(config.relay_mode.into())
             .alpns(alpn_protocols)
@@ -320,13 +321,13 @@ fn add_address_lookup(
 /// Accepts a uni directional stream on this connection.
 ///
 /// Blocks the current thread.
-#[ffi_export]
-pub fn connection_accept_uni(
+#[ffi_export(executor=tokio_executor)]
+pub async fn connection_accept_uni(
     conn: &repr_c::Box<Connection>,
     out: &mut repr_c::Box<RecvStream>,
 ) -> EndpointResult {
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        let recv_stream = conn
+    ffi_await!(async move {
+        let res = conn
             .connection
             .read()
             .await
@@ -334,34 +335,32 @@ pub fn connection_accept_uni(
             .expect("connection not initialized")
             .accept_uni()
             .await
-            .context("accept_uni")?;
+            .context("accept_uni");
 
-        anyhow::Ok(recv_stream)
-    });
-
-    match res {
-        Ok(recv_stream) => {
-            out.stream.replace(recv_stream);
-            EndpointResult::Ok
+        match res {
+            Ok(recv_stream) => {
+                out.stream.replace(recv_stream);
+                EndpointResult::Ok
+            }
+            Err(err) => {
+                warn!("accept uni failed: {:?}", err);
+                EndpointResult::AcceptUniFailed
+            }
         }
-        Err(err) => {
-            warn!("accept uni failed: {:?}", err);
-            EndpointResult::AcceptUniFailed
-        }
-    }
+    })
 }
 
 /// Accept a bi directional stream on this endpoint.
 ///
 /// Blocks the current thread.
-#[ffi_export]
-pub fn connection_accept_bi(
+#[ffi_export(executor=tokio_executor)]
+pub async fn connection_accept_bi(
     conn: &repr_c::Box<Connection>,
     send: &mut repr_c::Box<SendStream>,
     recv: &mut repr_c::Box<RecvStream>,
 ) -> EndpointResult {
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        let (send_stream, recv_stream) = conn
+    ffi_await!(async move {
+        let res = conn
             .connection
             .read()
             .await
@@ -369,22 +368,20 @@ pub fn connection_accept_bi(
             .expect("connection not initialized")
             .accept_bi()
             .await
-            .context("accept_uni")?;
+            .context("accept_uni");
 
-        anyhow::Ok((send_stream, recv_stream))
-    });
-
-    match res {
-        Ok((send_stream, recv_stream)) => {
-            send.stream.replace(send_stream);
-            recv.stream.replace(recv_stream);
-            EndpointResult::Ok
+        match res {
+            Ok((send_stream, recv_stream)) => {
+                send.stream.replace(send_stream);
+                recv.stream.replace(recv_stream);
+                EndpointResult::Ok
+            }
+            Err(err) => {
+                warn!("accept bi failed: {:?}", err);
+                EndpointResult::AcceptBiFailed
+            }
         }
-        Err(err) => {
-            warn!("accept bi failed: {:?}", err);
-            EndpointResult::AcceptBiFailed
-        }
-    }
+    })
 }
 
 /// An established connection.
@@ -402,18 +399,18 @@ pub fn connection_default() -> repr_c::Box<Connection> {
 }
 
 /// Frees the connection.
-#[ffi_export]
-pub fn connection_free(conn: repr_c::Box<Connection>) {
-    TOKIO_EXECUTOR.block_on(async move {
+#[ffi_export(executor=tokio_executor)]
+pub async fn connection_free(conn: repr_c::Box<Connection>) {
+    ffi_await!(async move {
         let _ = conn.connection.write().await.take();
-    });
+    })
 }
 
 /// Estimated roundtrip time for the current connection's selected path in milli seconds.
 /// Returns 0 if no path is selected.
-#[ffi_export]
-pub fn connection_rtt(conn: &repr_c::Box<Connection>) -> u64 {
-    TOKIO_EXECUTOR.block_on(async move {
+#[ffi_export(executor=tokio_executor)]
+pub async fn connection_rtt(conn: &repr_c::Box<Connection>) -> u64 {
+    ffi_await!(async move {
         let c = conn.connection.read().await;
         let c = c.as_ref().expect("connection not initialized");
         let paths = c.paths();
@@ -427,9 +424,9 @@ pub fn connection_rtt(conn: &repr_c::Box<Connection>) -> u64 {
 
 /// Returns the ratio of lost packets to sent packets on the selected path.
 /// Returns 0.0 if no path is selected or no packets have been sent.
-#[ffi_export]
-pub fn connection_packet_loss(conn: &repr_c::Box<Connection>) -> f64 {
-    TOKIO_EXECUTOR.block_on(async move {
+#[ffi_export(executor=tokio_executor)]
+pub async fn connection_packet_loss(conn: &repr_c::Box<Connection>) -> f64 {
+    ffi_await!(async move {
         let c = conn.connection.read().await;
         let c = c.as_ref().expect("connection not initialized");
         let paths = c.paths();
@@ -452,14 +449,14 @@ pub fn connection_packet_loss(conn: &repr_c::Box<Connection>) -> f64 {
 /// Send a single datgram (unreliably).
 ///
 /// Data must not be larger than the available `max_datagram` size.
-#[ffi_export]
-pub fn connection_write_datagram(
+#[ffi_export(executor=tokio_executor)]
+pub async fn connection_write_datagram(
     connection: &repr_c::Box<Connection>,
     data: slice::slice_ref<'_, u8>,
 ) -> EndpointResult {
     // TODO: is there a way to avoid this allocation?
     let data = bytes::Bytes::copy_from_slice(data.as_ref());
-    TOKIO_EXECUTOR.block_on(async move {
+    ffi_await!(async move {
         let res = connection
             .connection
             .read()
@@ -483,35 +480,34 @@ pub fn connection_write_datagram(
 /// Data must not be larger than the available `max_datagram` size.
 ///
 /// Blocks the current thread until a datagram is received.
-#[ffi_export]
-pub fn connection_read_datagram(
+#[ffi_export(executor=tokio_executor)]
+pub async fn connection_read_datagram(
     connection: &repr_c::Box<Connection>,
     data: &mut vec::Vec<u8>,
 ) -> EndpointResult {
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        connection
+    ffi_await!(async move {
+        let res = connection
             .connection
             .read()
             .await
             .as_ref()
             .expect("connection not initialized")
             .read_datagram()
-            .await
-    });
-
-    match res {
-        Ok(bytes) => {
-            data.with_rust_mut(|v| {
-                v.resize(bytes.len(), 0u8);
-                v.copy_from_slice(&bytes);
-            });
-            EndpointResult::Ok
+            .await;
+        match res {
+            Ok(bytes) => {
+                data.with_rust_mut(|v| {
+                    v.resize(bytes.len(), 0u8);
+                    v.copy_from_slice(&bytes);
+                });
+                EndpointResult::Ok
+            }
+            Err(err) => {
+                warn!("read failed: {:?}", err);
+                EndpointResult::ReadError
+            }
         }
-        Err(err) => {
-            warn!("read failed: {:?}", err);
-            EndpointResult::ReadError
-        }
-    }
+    })
 }
 
 /// Reads a datgram, with timeout.
@@ -521,15 +517,15 @@ pub fn connection_read_datagram(
 /// Data received will not be larger than the available `max_datagram` size.
 ///
 /// Blocks the current thread until a datagram is received or the timeout is expired.
-#[ffi_export]
-pub fn connection_read_datagram_timeout(
+#[ffi_export(executor=tokio_executor)]
+pub async fn connection_read_datagram_timeout(
     connection: &repr_c::Box<Connection>,
     data: &mut vec::Vec<u8>,
     timeout_ms: u64,
 ) -> EndpointResult {
     let timeout = Duration::from_millis(timeout_ms);
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        tokio::time::timeout(timeout, async move {
+    ffi_await!(async move {
+        let res = tokio::time::timeout(timeout, async move {
             connection
                 .connection
                 .read()
@@ -539,32 +535,32 @@ pub fn connection_read_datagram_timeout(
                 .read_datagram()
                 .await
         })
-        .await
-    });
+        .await;
 
-    match res {
-        Ok(Ok(bytes)) => {
-            data.with_rust_mut(|v| {
-                v.resize(bytes.len(), 0u8);
-                v.copy_from_slice(&bytes);
-            });
-            EndpointResult::Ok
+        match res {
+            Ok(Ok(bytes)) => {
+                data.with_rust_mut(|v| {
+                    v.resize(bytes.len(), 0u8);
+                    v.copy_from_slice(&bytes);
+                });
+                EndpointResult::Ok
+            }
+            Ok(Err(err)) => {
+                warn!("read failed: {:?}", err);
+                EndpointResult::ReadError
+            }
+            Err(_err) => {
+                warn!("read failed timeout");
+                EndpointResult::Timeout
+            }
         }
-        Ok(Err(err)) => {
-            warn!("read failed: {:?}", err);
-            EndpointResult::ReadError
-        }
-        Err(_err) => {
-            warn!("read failed timeout");
-            EndpointResult::Timeout
-        }
-    }
+    })
 }
 
 /// Returns the maximum datagram size. `0` if it is not supported.
-#[ffi_export]
-pub fn connection_max_datagram_size(connection: &repr_c::Box<Connection>) -> usize {
-    TOKIO_EXECUTOR.block_on(async move {
+#[ffi_export(executor=tokio_executor)]
+pub async fn connection_max_datagram_size(connection: &repr_c::Box<Connection>) -> usize {
+    ffi_await!(async move {
         connection
             .connection
             .read()
@@ -582,35 +578,38 @@ pub fn connection_max_datagram_size(connection: &repr_c::Box<Connection>) -> usi
 ///
 /// An [`EndpointResult::IncomingError`] occurring here is likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
 /// It is not considered fatal and is common to simply log and ignore.
-#[ffi_export]
-pub fn endpoint_accept(
+#[ffi_export(executor=tokio_executor)]
+pub async fn endpoint_accept(
     ep: &repr_c::Box<Endpoint>,
     expected_alpn: slice::slice_ref<'_, u8>,
     out: &repr_c::Box<Connection>,
 ) -> EndpointResult {
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        let (alpn, connection) = accept_conn(ep).await?;
-        if alpn != expected_alpn.as_slice() {
-            return Err(AcceptError::ConnectionError(anyhow::anyhow!(
-                "ALPN mismatch: expected {:?}, got {:?}",
-                expected_alpn.as_slice(),
-                alpn
-            )));
+    ffi_await!(async move {
+        let res = async {
+            let (alpn, connection) = accept_conn(ep).await?;
+            if alpn != expected_alpn.as_slice() {
+                return Err(AcceptError::ConnectionError(anyhow::anyhow!(
+                    "ALPN mismatch: expected {:?}, got {:?}",
+                    expected_alpn.as_slice(),
+                    alpn
+                )));
+            }
+            out.connection.write().await.replace(connection);
+            Ok(())
         }
-        out.connection.write().await.replace(connection);
-        Ok(())
-    });
+        .await;
 
-    match res {
-        Ok(()) => EndpointResult::Ok,
-        Err(err) => {
-            warn!(
-                "accept failed: {:?}: {err}",
-                std::str::from_utf8(expected_alpn.as_ref()),
-            );
-            err.into()
+        match res {
+            Ok(()) => EndpointResult::Ok,
+            Err(err) => {
+                warn!(
+                    "accept failed: {:?}: {err}",
+                    std::str::from_utf8(expected_alpn.as_ref()),
+                );
+                err.into()
+            }
         }
-    }
+    })
 }
 
 async fn accept_conn(
@@ -644,28 +643,31 @@ async fn accept_conn(
 ///
 /// An [`EndpointResult::IncomingError`] occurring here is likely not caused by the application or remote. The QUIC connection listens on a normal UDP socket and any reachable network endpoint can send datagrams to it, solicited or not.
 /// It is not considered fatal and is common to simply log and ignore.
-#[ffi_export]
-pub fn endpoint_accept_any(
+#[ffi_export(executor=tokio_executor)]
+pub async fn endpoint_accept_any(
     ep: &repr_c::Box<Endpoint>,
     alpn_out: &mut vec::Vec<u8>,
     out: &repr_c::Box<Connection>,
 ) -> EndpointResult {
-    let res: Result<(), AcceptError> = TOKIO_EXECUTOR.block_on(async move {
-        let (alpn, connection) = accept_conn(ep).await?;
-        alpn_out.with_rust_mut(|v| {
-            *v = alpn;
-        });
-        out.connection.write().await.replace(connection);
-        Ok(())
-    });
-
-    match res {
-        Ok(()) => EndpointResult::Ok,
-        Err(err) => {
-            warn!("accept failed {err}");
-            err.into()
+    ffi_await!(async move {
+        let res: Result<(), AcceptError> = async {
+            let (alpn, connection) = accept_conn(ep).await?;
+            alpn_out.with_rust_mut(|v| {
+                *v = alpn;
+            });
+            out.connection.write().await.replace(connection);
+            Ok(())
         }
-    }
+        .await;
+
+        match res {
+            Ok(()) => EndpointResult::Ok,
+            Err(err) => {
+                warn!("accept failed {err}");
+                err.into()
+            }
+        }
+    })
 }
 
 /// Accept a new connection on this endpoint.
@@ -747,84 +749,80 @@ pub enum ConnectionType {
 /// Establish a uni directional connection.
 ///
 /// Blocks the current thread until the connection is established.
-#[ffi_export]
-pub fn connection_open_uni(
+#[ffi_export(executor=tokio_executor)]
+pub async fn connection_open_uni(
     conn: &repr_c::Box<Connection>,
     out: &mut repr_c::Box<SendStream>,
 ) -> EndpointResult {
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        let stream = conn
+    ffi_await!(async move {
+        let res = conn
             .connection
             .read()
             .await
             .as_ref()
             .expect("connection not initialized")
             .open_uni()
-            .await?;
+            .await;
 
-        anyhow::Ok(stream)
-    });
-
-    match res {
-        Ok(stream) => {
-            out.stream.replace(stream);
-            EndpointResult::Ok
+        match res {
+            Ok(stream) => {
+                out.stream.replace(stream);
+                EndpointResult::Ok
+            }
+            Err(err) => {
+                warn!("open uni failed: {:?}", err);
+                EndpointResult::ConnectUniError
+            }
         }
-        Err(err) => {
-            warn!("open uni failed: {:?}", err);
-            EndpointResult::ConnectUniError
-        }
-    }
+    })
 }
 
 /// Establish a bi directional connection.
 ///
 /// Blocks the current thread until the connection is established.
-#[ffi_export]
-pub fn connection_open_bi(
+#[ffi_export(executor=tokio_executor)]
+pub async fn connection_open_bi(
     conn: &repr_c::Box<Connection>,
     send: &mut repr_c::Box<SendStream>,
     recv: &mut repr_c::Box<RecvStream>,
 ) -> EndpointResult {
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        let (send_stream, recv_stream) = conn
+    ffi_await!(async move {
+        let res = conn
             .connection
             .read()
             .await
             .as_ref()
             .expect("connection not initialized")
             .open_bi()
-            .await?;
+            .await;
 
-        anyhow::Ok((send_stream, recv_stream))
-    });
-
-    match res {
-        Ok((send_stream, recv_stream)) => {
-            send.stream.replace(send_stream);
-            recv.stream.replace(recv_stream);
-            EndpointResult::Ok
+        match res {
+            Ok((send_stream, recv_stream)) => {
+                send.stream.replace(send_stream);
+                recv.stream.replace(recv_stream);
+                EndpointResult::Ok
+            }
+            Err(err) => {
+                warn!("connect bi failed: {:?}", err);
+                EndpointResult::ConnectBiError
+            }
         }
-        Err(err) => {
-            warn!("connect bi failed: {:?}", err);
-            EndpointResult::ConnectBiError
-        }
-    }
+    })
 }
 
 /// Close a connection
 ///
 /// Consumes the connection, no need to free it afterwards.
-#[ffi_export]
-pub fn connection_close(conn: repr_c::Box<Connection>) {
-    TOKIO_EXECUTOR.block_on(async move {
+#[ffi_export(executor=tokio_executor)]
+pub async fn connection_close(conn: repr_c::Box<Connection>) {
+    ffi_await!(async move {
         conn.connection
             .read()
             .await
             .as_ref()
             .expect("connection not initialized")
             .close(CLOSE_CODE, b"finished")
-    });
+    })
 }
 
 /// Wait for the connection to be closed.
@@ -832,39 +830,40 @@ pub fn connection_close(conn: repr_c::Box<Connection>) {
 /// Blocks the current thread.
 ///
 /// Consumes the connection, no need to free it afterwards.
-#[ffi_export]
-pub fn connection_closed(conn: repr_c::Box<Connection>) -> EndpointResult {
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        conn.connection
+#[ffi_export(executor=tokio_executor)]
+pub async fn connection_closed(conn: repr_c::Box<Connection>) -> EndpointResult {
+    ffi_await!(async move {
+        let res = conn
+            .connection
             .read()
             .await
             .as_ref()
             .expect("connection not initialized")
             .closed()
-            .await
-    });
-    match res {
-        ConnectionError::LocallyClosed | ConnectionError::ApplicationClosed(_) => {
-            EndpointResult::Ok
+            .await;
+        match res {
+            ConnectionError::LocallyClosed | ConnectionError::ApplicationClosed(_) => {
+                EndpointResult::Ok
+            }
+            _ => {
+                dbg!(res);
+                EndpointResult::CloseError
+            }
         }
-        _ => {
-            dbg!(res);
-            EndpointResult::CloseError
-        }
-    }
+    })
 }
 
 /// Connects to the given endpoint.
 ///
 /// Blocks until the connection is established.
-#[ffi_export]
-pub fn endpoint_connect(
+#[ffi_export(executor=tokio_executor)]
+pub async fn endpoint_connect(
     ep: &repr_c::Box<Endpoint>,
     alpn: slice::slice_ref<'_, u8>,
     endpoint_addr: EndpointAddr,
     out: &repr_c::Box<Connection>,
 ) -> EndpointResult {
-    let res = TOKIO_EXECUTOR.block_on(async move {
+    ffi_await!(async move {
         let conn = ep
             .ep
             .read()
@@ -872,19 +871,19 @@ pub fn endpoint_connect(
             .as_ref()
             .expect("endpoint not initialized")
             .connect(endpoint_addr, alpn.as_ref())
-            .await?;
-        out.connection.write().await.replace(conn);
+            .await;
 
-        anyhow::Ok(())
-    });
-
-    match res {
-        Ok(()) => EndpointResult::Ok,
-        Err(err) => {
-            warn!("connect failed: {:?}", err);
-            EndpointResult::ConnectError
+        match conn {
+            Ok(connection) => {
+                out.connection.write().await.replace(connection);
+                EndpointResult::Ok
+            }
+            Err(err) => {
+                warn!("connect failed: {:?}", err);
+                EndpointResult::ConnectError
+            }
         }
-    }
+    })
 }
 
 /// Closes the endpoint.
@@ -893,9 +892,9 @@ pub fn endpoint_connect(
 /// to close gracefully, before shutting down the endpoint.
 ///
 /// Consumes the endpoint, no need to free it afterwards.
-#[ffi_export]
-pub fn endpoint_close(ep: repr_c::Box<Endpoint>) {
-    TOKIO_EXECUTOR.block_on(async move {
+#[ffi_export(executor=tokio_executor)]
+pub async fn endpoint_close(ep: repr_c::Box<Endpoint>) {
+    ffi_await!(async move {
         ep.ep
             .write()
             .await
@@ -903,13 +902,13 @@ pub fn endpoint_close(ep: repr_c::Box<Endpoint>) {
             .expect("endpoint not initialized")
             .close()
             .await
-    });
+    })
 }
 
 /// Get the endpoint dialing information of this iroh endpoint.
-#[ffi_export]
-pub fn endpoint_addr(ep: &repr_c::Box<Endpoint>, out: &mut EndpointAddr) -> EndpointResult {
-    let res = TOKIO_EXECUTOR.block_on(async move {
+#[ffi_export(executor=tokio_executor)]
+pub async fn endpoint_addr(ep: &repr_c::Box<Endpoint>, out: &mut EndpointAddr) -> EndpointResult {
+    ffi_await!(async move {
         let addr = ep
             .ep
             .read()
@@ -917,19 +916,19 @@ pub fn endpoint_addr(ep: &repr_c::Box<Endpoint>, out: &mut EndpointAddr) -> Endp
             .as_ref()
             .expect("endpoint not initialized")
             .addr();
-        anyhow::Ok(addr)
-    });
+        let res = anyhow::Ok(addr);
 
-    match res {
-        Ok(addr) => {
-            *out = addr.into();
-            EndpointResult::Ok
+        match res {
+            Ok(addr) => {
+                *out = addr.into();
+                EndpointResult::Ok
+            }
+            Err(err) => {
+                warn!("failed to retrieve addr: {:?}", err);
+                EndpointResult::AddrError
+            }
         }
-        Err(err) => {
-            warn!("failed to retrieve addr: {:?}", err);
-            EndpointResult::AddrError
-        }
-    }
+    })
 }
 
 /// Returns once the endpoint is online.
@@ -938,11 +937,11 @@ pub fn endpoint_addr(ep: &repr_c::Box<Endpoint>, out: &mut EndpointAddr) -> Endp
 /// direct address.
 ///
 /// Will block at most `timeout` milliseconds.
-#[ffi_export]
-pub fn endpoint_online(ep: &repr_c::Box<Endpoint>, timeout_ms: u64) -> EndpointResult {
+#[ffi_export(executor=tokio_executor)]
+pub async fn endpoint_online(ep: &repr_c::Box<Endpoint>, timeout_ms: u64) -> EndpointResult {
     let timeout = Duration::from_millis(timeout_ms);
-    let res = TOKIO_EXECUTOR.block_on(async move {
-        tokio::time::timeout(timeout, async move {
+    ffi_await!(async move {
+        let res = tokio::time::timeout(timeout, async move {
             ep.ep
                 .read()
                 .await
@@ -951,15 +950,16 @@ pub fn endpoint_online(ep: &repr_c::Box<Endpoint>, timeout_ms: u64) -> EndpointR
                 .online()
                 .await;
         })
-        .await
-    });
-    match res {
-        Ok(()) => EndpointResult::Ok,
-        Err(_err) => {
-            warn!("online failed timeout");
-            EndpointResult::Timeout
+        .await;
+
+        match res {
+            Ok(()) => EndpointResult::Ok,
+            Err(_err) => {
+                warn!("online failed timeout");
+                EndpointResult::Timeout
+            }
         }
-    }
+    })
 }
 
 #[cfg(test)]
