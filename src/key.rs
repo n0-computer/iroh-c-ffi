@@ -260,7 +260,6 @@ mod tests {
 
         let public_key = secret_key_public(&secret_key);
         let public_key_str = public_key_as_base32(&public_key);
-        println!("{}", public_key_str);
         let mut public_key_back = public_key_default();
         let res = public_key_from_base32(public_key_str.as_ref(), &mut public_key_back);
         assert_eq!(res, KeyResult::Ok);
