@@ -22,8 +22,14 @@ env:
   BIN_NAME: iroh-c-ffi
   IROH_FORCE_STAGING_RELAYS: "1"
 
+# Default to read-only; jobs that need more grant it explicitly.
+permissions:
+  contents: read
+
 jobs:
   create-release:
+    permissions:
+      contents: write        # drafts the GitHub release
     name: create-release
     runs-on: ubuntu-latest
     outputs:
@@ -35,24 +41,33 @@ jobs:
       if: env.RELEASE_VERSION == '' && github.event_name == 'push'
       run: |
         # See: https://github.community/t5/GitHub-Actions/How-to-get-just-the-tag-name/m-p/32167/highlight/true#M1027
-        echo "RELEASE_VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-        echo "version is: ${{ env.RELEASE_VERSION }}"
+        version="${GITHUB_REF#refs/tags/}"
+        echo "RELEASE_VERSION=$version" >> "$GITHUB_ENV"
+        echo "version is: $version"
     - name: Get the release version from the tag (dispatch)
       shell: bash
       if: github.event_name == 'workflow_dispatch'
+      env:
+        INPUT_RELEASE_VERSION: ${{ github.event.inputs.release_version }}
       run: |
-        echo "RELEASE_VERSION=${{ github.event.inputs.release_version }}" >> $GITHUB_ENV
-        echo "version is: ${{ env.RELEASE_VERSION }}"
+        echo "RELEASE_VERSION=$INPUT_RELEASE_VERSION" >> "$GITHUB_ENV"
+        echo "version is: $INPUT_RELEASE_VERSION"
     - name: Checkout repository
       uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
+        persist-credentials: false
         fetch-depth: 1
+    # actions/create-release is archived. gh ships on the runner and keeps the
+    # upload_url output for any job that wants it.
     - name: Create GitHub release
       id: release
       if: github.event.inputs.create_release == 'true' || github.event_name == 'push'
-      uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # v1.1.4
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ env.RELEASE_VERSION }}
-        release_name: ${{ env.RELEASE_VERSION }}
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        if ! gh release view "$RELEASE_VERSION" >/dev/null 2>&1; then
+          gh release create "$RELEASE_VERSION" --title "$RELEASE_VERSION"
+        fi
+        upload_url="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_VERSION" --jq .upload_url)"
+        echo "upload_url=$upload_url" >> "$GITHUB_OUTPUT"
