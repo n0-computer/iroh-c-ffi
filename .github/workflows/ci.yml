@@ -36,14 +36,14 @@ jobs:
                       runner: [self-hosted, macOS, ARM64]
         steps:
             - name: checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Install ${{ matrix.rust }} rust
-              uses: dtolnay/rust-toolchain@master
+              uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
               with:
                 toolchain: ${{ matrix.rust }}
             - name: install cargo-nextest
-              uses: taiki-e/install-action@v2
+              uses: taiki-e/install-action@decb84fb327e5b809630c914eb4d1ca67cf59966 # v2.85.14
               with:
                 tool: nextest
             - name: run tests
@@ -168,7 +168,7 @@ jobs:
                       runner: [self-hosted, windows, x64]
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
             - name: Install ${{ matrix.rust }}
               run: |
                 rustup toolchain install ${{ matrix.rust }}
@@ -183,7 +183,7 @@ jobs:
                 $outputDir = if ($Env:CARGO_HOME) { Join-Path $Env:CARGO_HOME "bin" } else { "~/.cargo/bin" }
                 $tmp | Expand-Archive -DestinationPath $outputDir -Force
                 $tmp | Remove-Item
-            - uses: msys2/setup-msys2@v2
+            - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
               id: msys2
               with:
                 msystem: MINGW64
@@ -292,26 +292,27 @@ jobs:
               - armv7-linux-androideabi
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
             - name: Set up Rust
-              uses: dtolnay/rust-toolchain@stable
+              uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
               with:
+                toolchain: stable
                 target: ${{ matrix.target }}
             - name: Install rustup target
               run: rustup target add ${{ matrix.target }}
 
             - name: Setup Java
-              uses: actions/setup-java@v4
+              uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
               with:
                 distribution: 'temurin'
                 java-version: '17'
 
             - name: Setup Android SDK
-              uses: android-actions/setup-android@v3
+              uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 
             - name: Setup Android NDK
-              uses: arqu/setup-ndk@main
+              uses: nttld/setup-ndk@ed92fe6cadad69be94a966a7ee3271275e62f779 # v1.6.0
               id: setup-ndk
               with:
                 ndk-version: r23
@@ -335,12 +336,14 @@ jobs:
                 - i686-unknown-linux-gnu
         steps:
             - name: Checkout
-              uses: actions/checkout@v4
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
               with:
                 submodules: recursive
 
             - name: Install rust stable
-              uses: dtolnay/rust-toolchain@stable
+              uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+              with:
+                toolchain: stable
 
             - name: Cleanup Docker
               continue-on-error: true
@@ -373,8 +376,8 @@ jobs:
         name: cargo deny
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
-            - uses: EmbarkStudios/cargo-deny-action@v2
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+            - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
               with:
                 command: check advisories bans licenses sources
 
@@ -386,14 +389,15 @@ jobs:
             RUSTC_WRAPPER: "sccache"
             SCCACHE_GHA_ENABLED: "on"
         steps:
-        - uses: actions/checkout@master
+        - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-        - uses: dtolnay/rust-toolchain@stable
+        - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
           with:
+            toolchain: stable
             components: rustfmt
 
         - name: Install sccache
-          uses: mozilla-actions/sccache-action@v0.0.9
+          uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
         - name: fmt
           run: cargo fmt --all -- --check
@@ -408,10 +412,12 @@ jobs:
             RUSTC_WRAPPER: "sccache"
             SCCACHE_GHA_ENABLED: "on"
         steps:
-        - uses: actions/checkout@master
-        - uses: dtolnay/rust-toolchain@stable
+        - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # v1
+          with:
+            toolchain: stable
         - name: Install sccache
-          uses: mozilla-actions/sccache-action@v0.0.9
+          uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
         # TODO: We have a bunch of platform-dependent code so should
         #    probably run this job on the full platform matrix
@@ -432,11 +438,11 @@ jobs:
             RUSTC_WRAPPER: "sccache"
             SCCACHE_GHA_ENABLED: "on"
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
               with:
                   fetch-depth: 0
             - name: Install sccache
-              uses: mozilla-actions/sccache-action@v0.0.9
+              uses: mozilla-actions/sccache-action@7d986dd989559c6ecdb630a3fd2557667be217ad # v0.0.9
 
             - name: Setup Environment (PR)
               if: ${{ github.event_name == 'pull_request' }}
@@ -450,7 +456,7 @@ jobs:
                   echo "HEAD_COMMIT_SHA=$(git rev-parse origin/main)" >> ${GITHUB_ENV}
             - name: Check semver
               # uses: obi1kenobi/cargo-semver-checks-action@v2
-              uses: n0-computer/cargo-semver-checks-action@feat-baseline
+              uses: n0-computer/cargo-semver-checks-action@b49de9133f8849bb51cae32c6bdeb19a5c37e61f # feat-baseline
               with:
                   package: iroh-c-ffi
                   baseline-rev: ${{ env.HEAD_COMMIT_SHA }}

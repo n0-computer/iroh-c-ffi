@@ -44,13 +44,13 @@ jobs:
         echo "RELEASE_VERSION=${{ github.event.inputs.release_version }}" >> $GITHUB_ENV
         echo "version is: ${{ env.RELEASE_VERSION }}"
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
         fetch-depth: 1
     - name: Create GitHub release
       id: release
       if: github.event.inputs.create_release == 'true' || github.event_name == 'push'
-      uses: actions/create-release@v1
+      uses: actions/create-release@0cb9c9b65d5d1901c1f53e5e66eaf4afd303e70e # v1.1.4
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
