@@ -27,12 +27,23 @@ pub fn public_key_free(_key: PublicKey) {
     // nothing to do
 }
 
+/// Returns the public key as a hexadecimal string.
+///
+/// Result must be freed using `rust_free_string`
+#[ffi_export]
+pub fn public_key_as_hex(key: &PublicKey) -> char_p::Box {
+    iroh::PublicKey::from(key).to_string().try_into().unwrap()
+}
+
 /// Returns the public key as a base32 string.
 ///
 /// Result must be freed using `rust_free_string`
 #[ffi_export]
 pub fn public_key_as_base32(key: &PublicKey) -> char_p::Box {
-    iroh::PublicKey::from(key).to_string().try_into().unwrap()
+    data_encoding::BASE32_NOPAD
+        .encode(&key.key)
+        .try_into()
+        .unwrap()
 }
 
 /// Generate a default (invalid) public key.
@@ -46,6 +57,20 @@ pub fn public_key_default() -> PublicKey {
 /// Parses the public key from a base32 string.
 #[ffi_export]
 pub fn public_key_from_base32(raw_key: char_p::Ref<'_>, out: &mut PublicKey) -> KeyResult {
+    let key: Result<iroh::PublicKey, _> = raw_key.to_str().parse();
+
+    match key {
+        Ok(key) => {
+            out.key.copy_from_slice(key.as_bytes());
+            KeyResult::Ok
+        }
+        Err(_) => KeyResult::InvalidPublicKey,
+    }
+}
+
+/// Parses the public key from a hexadecimal string.
+#[ffi_export]
+pub fn public_key_from_hex(raw_key: char_p::Ref<'_>, out: &mut PublicKey) -> KeyResult {
     let key: Result<iroh::PublicKey, _> = raw_key.to_str().parse();
 
     match key {
@@ -119,6 +144,23 @@ pub fn secret_key_from_base32(
     }
 }
 
+/// Parses the secret key from a hexadecimal string.
+#[ffi_export]
+pub fn secret_key_from_hex(
+    raw_key: char_p::Ref<'_>,
+    out: &mut repr_c::Box<SecretKey>,
+) -> KeyResult {
+    let key: Result<iroh::SecretKey, _> = raw_key.to_str().parse();
+
+    match key {
+        Ok(key) => {
+            out.key = key;
+            KeyResult::Ok
+        }
+        Err(_) => KeyResult::InvalidPublicKey,
+    }
+}
+
 /// Generates a new key with default OS randomness.
 ///
 /// Result must be freed using `secret_key_free`
@@ -130,12 +172,23 @@ pub fn secret_key_generate() -> repr_c::Box<SecretKey> {
     .into()
 }
 
+/// Returns the secret key as a hexadecimal string.
+///
+/// Result must be freed using `rust_free_string`
+#[ffi_export]
+pub fn secret_key_as_hex(key: &SecretKey) -> char_p::Box {
+    data_encoding::HEXLOWER
+        .encode(&key.key.to_bytes())
+        .try_into()
+        .unwrap()
+}
+
 /// Returns the secret key as a base32 string.
 ///
 /// Result must be freed using `rust_free_string`
 #[ffi_export]
 pub fn secret_key_as_base32(key: &SecretKey) -> char_p::Box {
-    data_encoding::HEXLOWER
+    data_encoding::BASE32_NOPAD
         .encode(&key.key.to_bytes())
         .try_into()
         .unwrap()
@@ -172,13 +225,38 @@ mod tests {
     use super::*;
 
     #[test]
-    fn basic_key_ops() {
+    fn secret_key_from_to_hex() {
         let secret_key = secret_key_generate();
-
+        let secret_key_str = secret_key_as_hex(&secret_key);
+        let mut secret_key_back = secret_key_default();
+        let res = secret_key_from_hex(secret_key_str.as_ref(), &mut secret_key_back);
+        assert_eq!(res, KeyResult::Ok);
+    }
+    
+    #[test]
+    fn secret_key_from_to_base32() {
+        let secret_key = secret_key_generate();
         let secret_key_str = secret_key_as_base32(&secret_key);
         let mut secret_key_back = secret_key_default();
         let res = secret_key_from_base32(secret_key_str.as_ref(), &mut secret_key_back);
         assert_eq!(res, KeyResult::Ok);
+    }
+
+    #[test]
+    fn public_key_from_to_hex() {
+        let secret_key = secret_key_generate();
+
+        let public_key = secret_key_public(&secret_key);
+        let public_key_str = public_key_as_hex(&public_key);
+        let mut public_key_back = public_key_default();
+        let res = public_key_from_hex(public_key_str.as_ref(), &mut public_key_back);
+        assert_eq!(res, KeyResult::Ok);
+        assert_eq!(public_key, public_key_back);
+    }
+
+    #[test]
+    fn public_key_from_to_base32() {
+        let secret_key = secret_key_generate();
 
         let public_key = secret_key_public(&secret_key);
         let public_key_str = public_key_as_base32(&public_key);
