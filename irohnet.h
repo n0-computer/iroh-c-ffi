@@ -745,12 +745,21 @@ void
 iroh_enable_tracing (void);
 
 /** \brief
- *  Returns the public key as a base32 string.
+ *  Deprecated: use `public_key_as_str`. Despite the name, the result is hex.
  *
  *  Result must be freed using `rust_free_string`
  */
 char *
 public_key_as_base32 (
+    PublicKey_t const * key);
+
+/** \brief
+ *  Returns the public key as a lowercase hex string.
+ *
+ *  Result must be freed using `rust_free_string`
+ */
+char *
+public_key_as_str (
     PublicKey_t const * key);
 
 /** \brief
@@ -795,10 +804,18 @@ enum KeyResult {
 KeyResult_t;
 
 /** \brief
- *  Parses the public key from a base32 string.
+ *  Deprecated: use `public_key_from_string`. Accepts lowercase hex or unpadded base32.
  */
 KeyResult_t
 public_key_from_base32 (
+    char const * raw_key,
+    PublicKey_t * out);
+
+/** \brief
+ *  Parses the public key from lowercase hex or unpadded RFC 4648 base32.
+ */
+KeyResult_t
+public_key_from_string (
     char const * raw_key,
     PublicKey_t * out);
 
@@ -927,12 +944,21 @@ rust_free_string (
     char * string);
 
 /** \brief
- *  Returns the secret key as a base32 string.
+ *  Deprecated: use `secret_key_as_str`. Despite the name, the result is hex.
  *
  *  Result must be freed using `rust_free_string`
  */
 char *
 secret_key_as_base32 (
+    SecretKey_t const * key);
+
+/** \brief
+ *  Returns the secret key as a lowercase hex string.
+ *
+ *  Result must be freed using `rust_free_string`
+ */
+char *
+secret_key_as_str (
     SecretKey_t const * key);
 
 /** \brief
@@ -951,10 +977,18 @@ secret_key_free (
     SecretKey_t * key);
 
 /** \brief
- *  Parses the secret key from a base32 string.
+ *  Deprecated: use `secret_key_from_string`. Accepts lowercase hex or unpadded base32.
  */
 KeyResult_t
 secret_key_from_base32 (
+    char const * raw_key,
+    SecretKey_t * * out);
+
+/** \brief
+ *  Parses the secret key from lowercase hex or unpadded RFC 4648 base32.
+ */
+KeyResult_t
+secret_key_from_string (
     char const * raw_key,
     SecretKey_t * * out);
 
@@ -1120,6 +1154,13 @@ url_as_str (
  */
 Url_t *
 url_default (void);
+
+/** \brief
+ *  Frees the url.
+ */
+void
+url_free (
+    Url_t * url);
 
 /** \brief
  *  Try to parse a url from a string.
