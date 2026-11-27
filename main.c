@@ -39,7 +39,7 @@ run_server (EndpointConfig_t * config, slice_ref_uint8_t alpn_slice, bool json_o
     fprintf(stderr, "failed to get my address");
     return -1;
   }
-  char * endpoint_id_str = public_key_as_base32(&addr.id);
+  char * endpoint_id_str = public_key_as_str(&addr.id);
 
   Url_t * const * relay_url = endpoint_addr_relay_urls_nth(&addr, 0);
   char * relay_url_str;
@@ -282,7 +282,7 @@ run_client (
 
   // parse endpoint id
   PublicKey_t endpoint_id = public_key_default();
-  int ret = public_key_from_base32(endpoint_id_raw, &endpoint_id);
+  int ret = public_key_from_string(endpoint_id_raw, &endpoint_id);
   if (ret != 0) {
     fprintf(stderr, "invalid endpoint id");
     return -1;

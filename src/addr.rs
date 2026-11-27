@@ -329,6 +329,12 @@ pub fn url_default() -> repr_c::Box<Url> {
     Box::<Url>::default().into()
 }
 
+/// Frees the url.
+#[ffi_export]
+pub fn url_free(url: repr_c::Box<Url>) {
+    drop(url);
+}
+
 /// Formats the given url as a string
 ///
 /// Result must be freed with `rust_free_string`
@@ -397,5 +403,21 @@ mod tests {
         let res = endpoint_addr_from_string(string.as_ref(), &mut back);
         assert_eq!(res, AddrResult::Ok);
         assert_eq!(back, endpoint_addr);
+    }
+
+    #[test]
+    fn url_alloc_and_free() {
+        url_free(url_default());
+
+        let mut url = url_default();
+        let res = url_from_string(char_p::new("not a url").as_ref(), &mut url);
+        assert_eq!(res, AddrResult::InvalidUrl);
+        url_free(url);
+
+        let mut url = url_default();
+        let res = url_from_string(char_p::new("https://relay.example.com").as_ref(), &mut url);
+        assert_eq!(res, AddrResult::Ok);
+        assert_eq!(url_as_str(&url).to_str(), "https://relay.example.com/");
+        url_free(url);
     }
 }

@@ -196,7 +196,7 @@ int main(int argc, char const *const argv[])
         fprintf(stderr, "failed to get my address");
         return -1;
     }
-    char *endpoint_id_str = public_key_as_base32(&addr.id);
+    char *endpoint_id_str = public_key_as_str(&addr.id);
 
     Url_t * const * relay_url = endpoint_addr_relay_urls_nth(&addr, 0);
     char *relay_url_str = NULL;
